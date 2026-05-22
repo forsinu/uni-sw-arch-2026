@@ -14,11 +14,17 @@ class EnvironmentHandler(BaseSettings):
         env_file=".env",
     )
 
-    SECRET_KEY: str
-
-    JWT_ALGORITHM: str = "ES256"
+    JWT_ALGORITHM: str = "RS256"
     AT_EXP_MIN: int = 15
     RT_EXP_MIN: int = 5040
+    PASSWORD_LEN: int = 12
+    MAX_SESSIONS: int = 3
+
+    PRIVATE_KEY_PATH: str = "keys/private_key.pem"
+    PUBLIC_KEY_PATH: str = "keys/public_key.pem"
+
+    MAX_ATTEMPTS: int = 5
+    WINDOW_ATTEMPTS_MIN: int = 15
 
     DB_HOST: str = "auth-db"
     DB_NAME: str = "auth_db"

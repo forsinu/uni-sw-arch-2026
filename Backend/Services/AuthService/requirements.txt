@@ -1,4 +1,5 @@
 fastapi[all]
+fastapi_mail
 sqlalchemy
 sqlalchemy[asyncio]
 asyncpg
@@ -6,3 +7,6 @@ pydantic
 pydantic-settings
 argon2-cffi
 pyjwt
+pytest
+pytest-asyncio
+httpx

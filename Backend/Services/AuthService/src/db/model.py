@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 import enum
+from typing import Optional
 import uuid
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, String, Uuid
@@ -19,7 +20,7 @@ class Base(DeclarativeBase):
 
 
 class UserAccount(Base):
-    __tablename__ = "UserAccounts"
+    __tablename__ = "user_accounts"
 
     email: Mapped[str] = mapped_column(
         String(length=320),
@@ -39,7 +40,7 @@ class UserAccount(Base):
         default=UserAccountRole.DEFAULT_ACCOUNT,
     )
 
-    federationID: Mapped[str] = mapped_column(
+    federationId: Mapped[Optional[str]] = mapped_column(
         String(
             length=32
         ),  # Remember to set the federationID to RRR-XXXXXXXXX...X (28 bytes)
@@ -54,19 +55,19 @@ class UserAccount(Base):
         default=lambda: datetime.now(timezone.utc),
     )
 
-    isDisabled: Mapped[bool] = mapped_column(
+    isActive: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
-        default=False,
+        default=True,
     )
 
-    disabledAt: Mapped[datetime] = mapped_column(
+    disabledAt: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         default=None,
     )
 
-    updatedAt: Mapped[datetime] = mapped_column(
+    updatedAt: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
         onupdate=lambda: datetime.now(timezone.utc),
@@ -78,9 +79,23 @@ class UserAccount(Base):
         cascade="all, delete-orphan",
     )
 
+    createdBy: Mapped[Optional[uuid.UUID]] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("user_accounts.id", ondelete="SET NULL"),
+        nullable=True,
+        default=None,
+    )
+
+    updatedBy: Mapped[Optional[uuid.UUID]] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("user_accounts.id", ondelete="SET NULL"),
+        nullable=True,
+        default=None,
+    )
+
 
 class RefreshToken(Base):
-    __tablename__ = "refreshTokens"
+    __tablename__ = "refresh_tokens"
 
     token: Mapped[str] = mapped_column(
         String(length=255),
@@ -106,7 +121,7 @@ class RefreshToken(Base):
         nullable=False,
     )
 
-    rotatedAt: Mapped[datetime] = mapped_column(
+    rotatedAt: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
     )
@@ -117,11 +132,26 @@ class RefreshToken(Base):
         default=True,
     )
 
-    userAccount: Mapped[UserAccount] = relationship(back_populates="refreshTokens")
+    ipAddress: Mapped[str] = mapped_column(
+        String(length=45),
+        nullable=False,
+        default="Unknown",
+    )
+
+    userAgent: Mapped[str] = mapped_column(
+        String(length=512),
+        nullable=False,
+        default="Unknown",
+    )
+
+    userAccount: Mapped[UserAccount] = relationship(
+        back_populates="refreshTokens",
+        foreign_keys=[userAccountId],
+    )
 
 
 class LoginAttempt(Base):
-    __tablename__ = "loginAttempts"
+    __tablename__ = "login_attempts"
 
     usedEmail: Mapped[str] = mapped_column(
         String(length=320),
@@ -139,6 +169,29 @@ class LoginAttempt(Base):
         String(length=512),
         nullable=False,
         default="Unknown",
+    )
+
+    attemptedAt: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.now(timezone.utc),
+    )
+
+    wasSuccessfull: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+    )
+
+
+class ResetPasswdAttempt(Base):
+    __tablename__ = "reset_password_attempts"
+
+    userAccountId: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey(UserAccount.id, ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
 
     attemptedAt: Mapped[datetime] = mapped_column(

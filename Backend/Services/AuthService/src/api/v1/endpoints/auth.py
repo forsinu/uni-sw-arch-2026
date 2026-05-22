@@ -1,17 +1,26 @@
 from datetime import datetime, timezone
-from typing import Annotated, Optional
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Header, Response, status
+from typing import Annotated
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 
-from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
-from src.core.util import handleDbOp
+from src.core.util import handleDbOp, ClientInfo
 from src.core.security import SecurityHandler
 from src.db.model import LoginAttempt, RefreshToken, UserAccount
-from src.schema.auth import LoginReq, LogoutReq, RegistrationReq, TokenResp
-from src.api.dependencies import dbHandler, secHandler, tokenHandler
+from src.schema.auth import (
+    LoginReq,
+    LogoutReq,
+    RegistrationReq,
+    TokenResp,
+)
+
+from src.api.dependencies import (
+    clientInfoHandler,
+    dbHandler,
+    refreshTokenHandler,
+    secHandler,
+)
 
 router = APIRouter()
 
@@ -30,25 +39,24 @@ async def registration(
         password=sec.hashPassword(user.password),
     )
 
-    db.add(account)
-
-    try:
+    async with handleDbOp(db, "Internal Server Error"):
+        db.add(account)
         await db.commit()
 
-    except IntegrityError:
-        await db.rollback()
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="A user with this email already exists.",
-        )
+    # except IntegrityError:
+    #     await db.rollback()
+    #     raise HTTPException(
+    #         status_code=status.HTTP_400_BAD_REQUEST,
+    #         detail="A user with this email already exists.",
+    #     )
 
-    except SQLAlchemyError as e:
-        await db.rollback()
-        # TODO: Log the actual error (e) to your server logs here
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error during registration.",
-        )
+    # except SQLAlchemyError as e:
+    #     await db.rollback()
+    #     # TODO: Log the actual error (e) to your server logs here
+    #     raise HTTPException(
+    #         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+    #         detail="Internal server error during registration.",
+    #     )
 
 
 @router.post(
@@ -65,19 +73,20 @@ async def login(
     db: Annotated[AsyncSession, Depends(dbHandler)],
     sec: Annotated[SecurityHandler, Depends(secHandler)],
     # === Headers
-    user_agent: Annotated[Optional[str], Header()] = None,
-    x_forwarded_for: Annotated[Optional[str], Header()] = None,
+    ci: Annotated[ClientInfo, Depends(clientInfoHandler)],
 ):
-    clientIp = "Unknown"
-    if x_forwarded_for:
-        clientIp = x_forwarded_for.split(",")[0].strip()
 
-    userAgent = user_agent or "Unknown"
+    await sec.checkRateLimit(
+        db=db,
+        model=LoginAttempt,
+        emailOrIdColumn=LoginAttempt.usedEmail,
+        targetValue=credentials.email,
+    )
 
     loginAttempt = LoginAttempt(
         usedEmail=credentials.email,
-        ipAddress=clientIp,
-        userAgent=userAgent,
+        ipAddress=ci.ip,
+        userAgent=ci.userAgent,
     )
 
     query = await db.execute(
@@ -109,17 +118,40 @@ async def login(
 
     loginAttempt.wasSuccessfull = True
 
+    async with handleDbOp(
+        db, "Internal server error during device session validation."
+    ):
+        query = await db.execute(
+            select(RefreshToken)
+            .where(
+                RefreshToken.userAccountId == result.id,
+                RefreshToken.isActive == True,
+            )
+            .order_by(RefreshToken.createdAt.asc())
+            # .values(isActive=False, rotated=datetime.now(timezone.utc))
+        )
+
+        activeSessions = query.scalars().all()
+
+        if sec.env.MAX_SESSIONS <= len(activeSessions):
+            excessSessions = (len(activeSessions) - sec.env.MAX_SESSIONS) + 1
+            for i in range(excessSessions):
+                activeSessions[i].isActive = False
+                activeSessions[i].rotatedAt = datetime.now(timezone.utc)
+
     accessToken = sec.generateAccessToken(
         userId=result.id,
         role=result.userRole,
-        fed=result.federationID,
+        fed=result.federationId,
     )
 
     tmpRt = sec.generateRandomToken()
     refreshToken = RefreshToken(
-        token=tmpRt["token"],
+        token=tmpRt.token,
         userAccountId=result.id,
-        expiresAt=tmpRt["exp"],
+        expiresAt=tmpRt.exp,
+        ipAddress=ci.ip,
+        userAgent=ci.userAgent,
     )
 
     async with handleDbOp(db, "Internal server error during sign in."):
@@ -140,15 +172,16 @@ async def login(
     return TokenResp(at=accessToken, tt="bearer")
 
 
-@router.post("/refresh", response_model=TokenResp, status_code=status.HTTP_200_OK)
+@router.get("/refresh", response_model=TokenResp, status_code=status.HTTP_200_OK)
 async def refresh(
     # === Response
     response: Response,
     # === Dependencies
     db: Annotated[AsyncSession, Depends(dbHandler)],
     sec: Annotated[SecurityHandler, Depends(secHandler)],
+    ci: Annotated[ClientInfo, Depends(clientInfoHandler)],
     # === Cookies
-    rt: Annotated[Optional[str], Cookie()] = None,
+    rt: Annotated[str, Depends(refreshTokenHandler)],
 ):
     if not rt:
         raise HTTPException(
@@ -211,7 +244,7 @@ async def refresh(
 
         userAccount = query.scalar_one_or_none()
 
-    if not userAccount or userAccount.isDisabled:
+    if not userAccount or not userAccount.isActive:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User account is disabled or does not exist anymore.",
@@ -223,15 +256,17 @@ async def refresh(
     newAt = sec.generateAccessToken(
         userId=userAccount.id,
         role=userAccount.userRole,
-        fed=userAccount.federationID,
+        fed=userAccount.federationId,
     )
 
     tmpRt = sec.generateRandomToken()
     newRt = RefreshToken(
-        token=tmpRt["token"],
+        token=tmpRt.token,
         userAccountId=userAccount.id,
-        expiresAt=tmpRt["exp"],
+        expiresAt=tmpRt.exp,
         isActive=True,
+        ipAddress=ci.ip,
+        userAgent=ci.userAgent,
     )
 
     async with handleDbOp(db, "Internal server error during token rotation."):
@@ -261,7 +296,7 @@ async def logout(
     sec: Annotated[SecurityHandler, Depends(secHandler)],
     # at: Annotated[HTTPAuthorizationCredentials, Depends(tokenHandler)],
     # === Cookies
-    rt: Annotated[Optional[str], Cookie()] = None,
+    rt: Annotated[str, Depends(refreshTokenHandler)],
 ):
     # if not rt or sec.verifyAccessToken(at.credentials):
     if not rt:
@@ -297,3 +332,9 @@ async def logout(
         httponly=True,
         samesite="lax",
     )
+
+
+# TODO: Add the model in SecurityHandler
+@router.get("/.well-known/jwks.json", status_code=status.HTTP_200_OK)
+async def getJWKS(sec: Annotated[SecurityHandler, Depends(secHandler)]):
+    return sec.generateJWKS()
