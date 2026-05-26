@@ -6,7 +6,7 @@ from pydantic_settings import (
 from pydantic import PostgresDsn, computed_field
 
 
-class EnvironmentHandler(BaseSettings):
+class EnvHandler(BaseSettings):
     model_config = SettingsConfigDict(
         env_file_encoding="utf-8",
         case_sensitive=True,
@@ -14,15 +14,16 @@ class EnvironmentHandler(BaseSettings):
         env_file=".env",
     )
 
+    PRIVATE_KEY_PATH: str = "keys/privateKey.pem"
+    PUBLIC_KEY_PATH: str = "keys/publickey.pem"
+
     JWT_ALGORITHM: str = "RS256"
     AT_EXP_MIN: int = 15
     RT_EXP_MIN: int = 5040
-    PASSWORD_LEN: int = 12
+
+    PASSWORD_LEN: int = 16
+
     MAX_SESSIONS: int = 3
-
-    PRIVATE_KEY_PATH: str = "keys/private_key.pem"
-    PUBLIC_KEY_PATH: str = "keys/public_key.pem"
-
     MAX_ATTEMPTS: int = 5
     WINDOW_ATTEMPTS_MIN: int = 15
 
@@ -32,13 +33,15 @@ class EnvironmentHandler(BaseSettings):
     DB_USER: str
     DB_PASSWD: str
 
+    RATE_LIMIT_STORAGE_URI: str = "memory://"
+
     @computed_field
     @property
     def DB_URL(self) -> str:
         url = PostgresDsn.build(
             scheme="postgresql+asyncpg",
             host=self.DB_HOST,
-            port=5432,  # Maintain the defualt port for Postgres DB
+            port=5432,
             username=self.DB_USER,
             password=self.DB_PASSWD,
             path=self.DB_NAME,

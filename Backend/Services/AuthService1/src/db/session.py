@@ -6,12 +6,12 @@ from sqlalchemy.ext.asyncio import (
 
 from typing import AsyncGenerator
 
-from src.core.environment import EnvironmentHandler
-from src.db.model import Base
+from src.core.env import EnvHandler
+from src.db.models.base import Base
 
 
 class DatabaseHandler:
-    def __init__(self, env: EnvironmentHandler):
+    def __init__(self, env: EnvHandler):
         self.engine = create_async_engine(
             env.DB_URL,
             pool_pre_ping=True,
