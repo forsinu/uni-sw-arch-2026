@@ -6,15 +6,26 @@ from fastapi import Depends, FastAPI, status
 from typing import Annotated
 
 
+from src.core.env import EnvHandler
 from src.core.security import SecurityHandler
+from src.db.session import DatabaseHandler
 from src.api.v1.api import api as apiV1
 
-from src.api.dependencies import database, secHandler
+from src.api.dependencies import secHandler
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    env = EnvHandler()
+
+    database = DatabaseHandler(env=env)
+    security = SecurityHandler(env=env)
+
     await database.initModel()
+
+    app.state.env = env
+    app.state.database = database
+    app.state.security = security
 
     yield
 

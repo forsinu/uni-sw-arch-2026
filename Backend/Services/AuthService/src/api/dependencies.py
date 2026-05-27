@@ -16,23 +16,19 @@ from src.core.env import EnvHandler
 from src.core.util import handleDbOp, ClientInfo
 
 
-env = EnvHandler()
-
-database = DatabaseHandler(env=env)
-security = SecurityHandler(env=env)
-
 tokenHandler = HTTPBearer()
 
 
-def envHandler() -> EnvHandler:
-    return env
+def envHandler(request: Request) -> EnvHandler:
+    return request.app.state.env
 
 
-def secHandler() -> SecurityHandler:
-    return security
+def secHandler(request: Request) -> SecurityHandler:
+    return request.app.state.security
 
 
-async def dbHandler() -> AsyncGenerator[AsyncSession, None]:
+async def dbHandler(request: Request) -> AsyncGenerator[AsyncSession, None]:
+    database: DatabaseHandler = request.app.state.database
     async for session in database.getDbSession():
         yield session
 
