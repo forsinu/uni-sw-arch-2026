@@ -20,9 +20,9 @@ class EnvHandler(BaseSettings):
     DB_USER: str
     DB_PASSWD: str
 
-    AUTH_HOST: str = "localhost"
+    AUTH_HOST: str = "auth-service"
     AUTH_PORT: int = 8000
-    AUTH_PUB_KEY_PATH = "/.well-known/jwks.json"
+    AUTH_PUB_KEY_PATH: str = ".well-known/jwks.json"
     JWT_ALGORITHM: str = "RS256"
 
     @computed_field
@@ -42,11 +42,13 @@ class EnvHandler(BaseSettings):
     @computed_field
     @property
     def AUTH_JWKS_URL(self) -> str:
+        baseHost = self.AUTH_HOST.rstrip("/")
+        cleanPath = self.AUTH_PUB_KEY_PATH.strip("/")
         url = AnyHttpUrl.build(
             scheme="http",
-            host=self.AUTH_HOST,
+            host=baseHost,
             port=self.AUTH_PORT,
-            path=self.AUTH_PUB_KEY_PATH,
+            path=cleanPath,
         )
 
         return str(url)

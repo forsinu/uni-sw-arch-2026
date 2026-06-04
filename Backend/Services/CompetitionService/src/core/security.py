@@ -64,7 +64,7 @@ class SecurityHandler:
         async with httpx.AsyncClient(timeout=10.0) as client:
             try:
                 response = await client.get(self.env.AUTH_JWKS_URL)
-                response.raise_for_status()
+                # response.raise_for_status()
 
                 self.jwksCache = response.json()
 
@@ -74,7 +74,9 @@ class SecurityHandler:
                     )
 
             except httpx.HTTPError as exc:
-                raise RuntimeError(f"Failed to fetch JWKS from Auth Service: {exc}")
+                raise RuntimeError(
+                    f"Failed to fetch JWKS from Auth Service: {self.env.AUTH_JWKS_URL}"
+                )
 
     async def initialize(self):
         await self.__loadPubKey()
