@@ -32,6 +32,7 @@ services:
 
     networks:
       - auth-net
+      - shared-mesh
 
 
 volumes:
@@ -40,3 +41,6 @@ volumes:
 networks:
   auth-net:
     driver: bridge
+
+  shared-mesh:
+    external: true
