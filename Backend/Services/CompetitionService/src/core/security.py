@@ -5,6 +5,7 @@ from typing import Annotated, Optional
 import uuid
 
 
+import httpx
 import jwt
 from pydantic import BaseModel, BeforeValidator, field_serializer
 
@@ -57,21 +58,63 @@ class SecurityHandler:
 
     def __init__(self, env: EnvHandler):
         self.env = env
+        self.jwksCache: Optional[dict] = None
+
+    async def __loadPubKey(self):
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            try:
+                response = await client.get(self.env.AUTH_JWKS_URL)
+                response.raise_for_status()
+
+                self.jwksCache = response.json()
+
+                if "keys" not in self.jwksCache:
+                    raise RuntimeError(
+                        "Invalid JWKS payload received: missing 'keys' dictionary element."
+                    )
+
+            except httpx.HTTPError as exc:
+                raise RuntimeError(f"Failed to fetch JWKS from Auth Service: {exc}")
+
+    async def initialize(self):
+        await self.__loadPubKey()
 
     def verifyAccessToken(self, token: str) -> AccessTokenPayload:
+        if not self.jwksCache:
+            raise RuntimeError(
+                "SecurityHandler cannot verify incoming traffic: JWKS cache is empty."
+            )
+
         try:
+            header = jwt.get_unverified_header(token)
+            tokenKID = header.get("kid")
+            if not tokenKID:
+                raise ValueError(
+                    "Incoming token header is missing the required 'kid' parameter."
+                )
+
+            pubKey = None
+            for keyData in self.jwksCache["keys"]:
+                if keyData.get("kid") == tokenKID:
+                    pubKey = jwt.PyJWK(keyData).key
+                    break
+
+            if not pubKey:
+                raise ValueError(
+                    "The signature key identifier ('kid') matched no keys in the cached JWKS."
+                )
+
             payload = jwt.decode(
                 jwt=token,
-                key=self.pubKeyPem,
+                key=pubKey,
                 algorithms=[self.env.JWT_ALGORITHM],
             )
             return AccessTokenPayload.model_validate(payload)
 
         except jwt.ExpiredSignatureError:
             raise ValueError("Token has expired")
-
-        except jwt.InvalidTokenError:
-            raise ValueError("Invalid token")
+        except jwt.InvalidTokenError as e:
+            raise ValueError(f"Invalid token: {str(e)}")
 
     def extractFedFields(
         self, token: AccessTokenPayload

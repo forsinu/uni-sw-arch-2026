@@ -21,6 +21,8 @@ async def lifespan(app: FastAPI):
 
     await database.initModel()
 
+    await security.initialize()
+
     app.state.env = env
     app.state.database = database
     app.state.security = security
