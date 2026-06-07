@@ -45,7 +45,6 @@ async def createMeeting(
         startAt=payload.startAt,
         endAt=payload.endAt,
         organizedBy=payload.organizedBy,
-        createdBy=payload.createdBy,
         swimmingPoolId=payload.swimmingPoolId,
         events=[
             SwimEvent(distance=e.distance, stroke=e.stroke) for e in payload.swimEvents

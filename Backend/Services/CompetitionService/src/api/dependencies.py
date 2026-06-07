@@ -56,11 +56,12 @@ class AccessHandler:
                 detail=f"Authentication failed: {str(e)}",
             )
 
-        if self.checkAdmin and payload.role != UserAccountRole.ADMIN:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"Access denied. Required roles: {UserAccountRole.ADMIN}",
-            )
+        if self.checkAdmin:
+            if payload.role != UserAccountRole.ADMIN:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Access denied. Required roles: {UserAccountRole.ADMIN}",
+                )
 
         elif self.allowedFedRoles:
             role = sec.extractFedFields(payload.fed)

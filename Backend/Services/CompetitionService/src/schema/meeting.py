@@ -54,12 +54,11 @@ class CreateMeetingReq(BaseModel):
     endAt: date
 
     # Team that organizes it
-    organizedBy: Optional[uuid.UUID]
+    organizedBy: Optional[uuid.UUID] = None
     # Team manager
-    createdBy: Optional[str]
-    swimmingPoolId: Optional[uuid.UUID]
+    swimmingPoolId: Optional[uuid.UUID] = None
 
-    swimEvents: list[CreateOrAddSwimEventReq]
+    swimEvents: Optional[list[CreateOrAddSwimEventReq]] = []
 
 
 class UpdateMeetingInfoReq(BaseModel):
