@@ -13,10 +13,24 @@ sharedOverlayNetwork: shared-service-net
 localServiceRoot: /home/filippo/Documents/uni/uni-sw-arch/Backend/Services
 
 secretsRoot: /opt/swarm-secrets
+
 jwtPrivateKeyPath: "{{ secretsRoot }}/jwt_private.pem"
 jwtPublicKeyPath: "{{ secretsRoot }}/jwt_public.pem"
 
 jwtPrivateKeySecretName: jwtPrivateKey
 jwtPublicKeySecretName: jwtPublicKey
-
 jwtKeySize: 4096
+
+authDbPasswordSecretName: authDbPassword
+authDbPasswordSecretPath: "{{ secretsRoot }}/auth_db_password.txt"
+
+authDbName: auth_db
+authDbUser: auth_user
+
+authPublishedPort: 8000
+authInternalPort: 8000
+authReplicas: 2
+
+portainerStackName: portainer
+portainerHttpPort: 9000
+portainerHttpsPort: 9443

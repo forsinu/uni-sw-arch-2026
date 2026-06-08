@@ -1,9 +1,7 @@
-from pydantic_settings import (
-    BaseSettings,
-    SettingsConfigDict,
-)
+from pathlib import Path
 
-from pydantic import PostgresDsn, computed_field, HttpUrl
+from pydantic import PostgresDsn, computed_field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class EnvHandler(BaseSettings):
@@ -31,7 +29,31 @@ class EnvHandler(BaseSettings):
     DB_NAME: str = "auth_db"
 
     DB_USER: str
-    DB_PASSWD: str
+
+    # Local development fallback
+    DB_PASSWD: str | None = None
+
+    # Docker Swarm secret path
+    DB_PASSWD_FILE: str | None = None
+
+    def _read_secret_file(self, path: str) -> str:
+        secret_path = Path(path)
+
+        if not secret_path.exists():
+            raise FileNotFoundError(f"Secret file not found: {path}")
+
+        return secret_path.read_text(encoding="utf-8").strip()
+
+    @computed_field
+    @property
+    def DB_PASSWORD(self) -> str:
+        if self.DB_PASSWD_FILE:
+            return self._read_secret_file(self.DB_PASSWD_FILE)
+
+        if self.DB_PASSWD:
+            return self.DB_PASSWD
+
+        raise ValueError("Either DB_PASSWD_FILE or DB_PASSWD must be provided")
 
     @computed_field
     @property
@@ -41,7 +63,7 @@ class EnvHandler(BaseSettings):
             host=self.DB_HOST,
             port=5432,
             username=self.DB_USER,
-            password=self.DB_PASSWD,
+            password=self.DB_PASSWORD,
             path=self.DB_NAME,
         )
 

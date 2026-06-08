@@ -1,13 +1,18 @@
 version: "3.8"
 
 services:
-  auth-db:
+  db:
     image: postgres:15-alpine
 
     environment:
       POSTGRES_USER: "{{ service.dbUser }}"
-      POSTGRES_PASSWORD: "{{ service.dbPassword }}"
       POSTGRES_DB: "{{ service.dbName }}"
+      POSTGRES_PASSWORD_FILE: "/run/secrets/{{ authDbPasswordSecretName }}"
+
+    secrets:
+      - source: {{ authDbPasswordSecretName }}
+        target: {{ authDbPasswordSecretName }}
+        mode: 0400
 
     volumes:
       - auth-db-data:/var/lib/postgresql/data/
@@ -23,7 +28,7 @@ services:
       restart_policy:
         condition: on-failure
 
-  auth-service:
+  service:
     image: "{{ swarmRegistryAddr }}/{{ service.imageName }}:{{ service.imageTag }}"
 
     ports:
@@ -33,11 +38,11 @@ services:
         mode: ingress
 
     environment:
-      DB_HOST: auth-db
+      DB_HOST: db
       DB_PORT: "5432"
       DB_NAME: "{{ service.dbName }}"
       DB_USER: "{{ service.dbUser }}"
-      DB_PASSWD: "{{ service.dbPassword }}"
+      DB_PASSWD_FILE: "/run/secrets/{{ authDbPasswordSecretName }}"
 
       JWT_PRIVATE_KEY_PATH: "/run/secrets/{{ jwtPrivateKeySecretName }}"
       JWT_PUBLIC_KEY_PATH: "/run/secrets/{{ jwtPublicKeySecretName }}"
@@ -47,6 +52,10 @@ services:
       - {{ sharedOverlayNetwork }}
 
     secrets:
+      - source: {{ authDbPasswordSecretName }}
+        target: {{ authDbPasswordSecretName }}
+        mode: 0400
+
       - source: {{ jwtPrivateKeySecretName }}
         target: {{ jwtPrivateKeySecretName }}
         mode: 0400
@@ -74,6 +83,9 @@ networks:
     name: {{ sharedOverlayNetwork }}
 
 secrets:
+  {{ authDbPasswordSecretName }}:
+    external: true
+
   {{ jwtPrivateKeySecretName }}:
     external: true
 

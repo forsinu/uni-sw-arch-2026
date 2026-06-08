@@ -2,3 +2,5 @@
 **/__pycache__/
 **/.vagrant/
 **/*.log
+./Shared/ansible/.env
+**/vault.yml

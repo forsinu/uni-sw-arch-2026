@@ -1,0 +1,5 @@
+---
+vaultAuthDbPassword: "auth_password"
+
+vaultPortainerAdminUser: "admin"
+vaultPortainerAdminPassword: "ChangeMeStrongPassword123!"

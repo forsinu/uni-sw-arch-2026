@@ -12,10 +12,9 @@ swarmServices:
     composeTemplate: auth-stack.yml.j2
     composeRemotePath: "{{ remoteStacksRoot }}/auth/docker-compose.yml"
 
-    replicas: 2
-    publishedPort: 8000
-    internalPort: 8000
+    replicas: "{{ authReplicas }}"
+    publishedPort: "{{ authPublishedPort }}"
+    internalPort: "{{ authInternalPort }}"
 
-    dbName: auth_db
-    dbUser: auth_user
-    dbPassword: auth_password
+    dbName: "{{ authDbName }}"
+    dbUser: "{{ authDbUser }}"

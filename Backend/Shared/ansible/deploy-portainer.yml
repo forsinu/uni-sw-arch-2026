@@ -1,0 +1,40 @@
+---
+- name: Deploy Portainer in Docker Swarm
+  hosts: swarmManagers[0]
+  become: true
+  vars_files:
+    - "{{ playbook_dir }}/groupVars/all.yml"
+    - "{{ playbook_dir }}/groupVars/vault.yml"
+
+  vars:
+    portainerStackPath: "{{ remoteStacksRoot }}/portainer/docker-compose.yml"
+    portainerAdminPasswordHash: "{{ (vaultPortainerAdminPassword | password_hash('bcrypt')) | replace('$', '$$') }}"
+
+  tasks:
+    - name: Create Portainer stack directory
+      ansible.builtin.file:
+        path: "{{ portainerStackPath | dirname }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Render Portainer stack file
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/templates/portainer-stack.yml.j2"
+        dest: "{{ portainerStackPath }}"
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+
+    - name: Deploy Portainer stack
+      ansible.builtin.command: >
+        docker stack deploy
+        -c {{ portainerStackPath }}
+        {{ portainerStackName }}
+      register: portainerDeploy
+      changed_when: >
+        'Creating service' in portainerDeploy.stdout or
+        'Updating service' in portainerDeploy.stdout or
+        'Creating network' in portainerDeploy.stdout
