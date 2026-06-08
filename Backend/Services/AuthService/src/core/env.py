@@ -3,7 +3,7 @@ from pydantic_settings import (
     SettingsConfigDict,
 )
 
-from pydantic import PostgresDsn, computed_field
+from pydantic import PostgresDsn, computed_field, HttpUrl
 
 
 class EnvHandler(BaseSettings):
@@ -32,8 +32,6 @@ class EnvHandler(BaseSettings):
 
     DB_USER: str
     DB_PASSWD: str
-
-    RATE_LIMIT_STORAGE_URI: str = "memory://"
 
     @computed_field
     @property

@@ -1,0 +1,19 @@
+---
+- name: Join Remaining Managers
+  hosts: swarmManagers[1:]
+  become: true
+  tasks:
+    - name: Check current Swarm Status cleanly
+      ansible.builtin.command: docker info --format '{{ '{{' }}.Swarm.LocalNodeState{{ '}}' }}'
+      register: nodeSwarmState
+      changed_when: false
+
+    - name: Join swarm as Manager
+      community.docker.docker_swarm:
+        state: join
+        advertise_addr: "{{ swarmIp }}"
+        # Pull the manager specific token from our virtual host
+        join_token: "{{ hostvars['SWARM_TOKEN_HOLDER']['managerToken'] }}"
+        remote_addrs:
+          - "{{ hostvars['SWARM_TOKEN_HOLDER']['managerAddr'] }}"
+      when: "'active' not in nodeSwarmState.stdout"

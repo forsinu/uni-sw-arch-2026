@@ -1,0 +1,38 @@
+---
+- name: Build, push and deploy services into Docker Swarm
+  hosts: swarmManagers[0]
+  become: true
+  vars_files:
+    - ./groupVars/services.yml
+    - ./groupVars/all.yml
+
+  tasks:
+    - name: Create Remote Services Root Directory
+      ansible.builtin.file:
+        path: "{{ remoteServicesRoot }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Create Remote stacks Root Directory
+      ansible.builtin.file:
+        path: "{{ remoteStacksRoot }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Ensure shared overlay network exists
+      community.docker.docker_network:
+        name: "{{ sharedOverlayNetwork }}"
+        driver: overlay
+        scope: swarm
+        attachable: true
+        state: present
+
+    - name: Deploy all configured services
+      ansible.builtin.include_tasks: ./deploy-one-service.yml
+      loop: "{{ swarmServices }}"
+      loop_control:
+        loop_var: service

@@ -10,3 +10,4 @@ pyjwt
 pytest
 pytest-asyncio
 httpx
+hvac

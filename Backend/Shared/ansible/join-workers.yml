@@ -1,0 +1,18 @@
+---
+- name: Join Workers to Swarm
+  hosts: swarmWorkers
+  become: true
+  tasks:
+    - name: Check current Swarm Status cleanly
+      ansible.builtin.command: docker info --format "{{ '{{' }}.Swarm.LocalNodeState{{ '}}' }}"
+      register: nodeSwarmState
+      changed_when: false
+
+    - name: Join swarm as worker
+      community.docker.docker_swarm:
+        state: join
+        advertise_addr: "{{ swarmIp }}"
+        join_token: "{{ hostvars['SWARM_TOKEN_HOLDER']['workerToken'] }}"
+        remote_addrs:
+          - "{{ hostvars['SWARM_TOKEN_HOLDER']['managerAddr'] }}"
+      when: nodeSwarmState.stdout != 'active'

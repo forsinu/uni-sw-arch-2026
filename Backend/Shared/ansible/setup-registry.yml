@@ -1,0 +1,56 @@
+---
+- name: Configure Docker nodes to use the internal Swarm registry
+  hosts: swarm
+  become: true
+  vars_files:
+    - ./groupVars/all.yml
+
+  tasks:
+    - name: Configure insecure registry for Local Swarm Registry
+      ansible.builtin.copy:
+        dest: /etc/docker/daemon.json
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          {
+            "insecure-registries": ["{{ swarmRegistryAddr }}"]
+          }
+      register: dockerDaemonConfig
+
+    - name: Restart Docker if daemon configuration changed
+      ansible.builtin.service:
+        name: docker
+        state: restarted
+      when: dockerDaemonConfig.changed
+
+- name: Start internal Docker registry service
+  hosts: swarmManagers[0]
+  become: true
+  vars_files:
+    - ./groupVars/all.yml
+
+  tasks:
+    - name: Check if registry service already exists
+      ansible.builtin.command: docker service ls --filter name=swarm-registry --format '{{ "{{" }}.Name{{ "}}" }}'
+      register: registryService
+      changed_when: false
+
+    - name: Create registry service
+      ansible.builtin.command: >
+        docker service create
+        --name swarm-registry
+        --publish published={{ swarmRegistryPort }},target=5000
+        --constraint node.role==manager
+        registry:2
+      when: "'swarm-registry' not in registryService.stdout"
+
+    - name: Wait until registry answers
+      ansible.builtin.uri:
+        url: "http://{{ swarmRegistryAddr }}/v2/"
+        method: GET
+        status_code: 200
+      register: registryHealth
+      retries: 20
+      delay: 2
+      until: registryHealth.status == 200

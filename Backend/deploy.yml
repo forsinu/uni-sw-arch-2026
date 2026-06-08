@@ -1,0 +1,31 @@
+---
+- name: Verify Docker Installation and Runtime Status
+  hosts: swarm
+  become: true
+  tasks:
+    - name: Ensure Docker service is running and enabled
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Verify Docker daemon responsiveness
+      ansible.builtin.command: docker info
+      register: dockerHealth
+      changed_when: false
+
+    - name: Fail if Docker daemon is not responding
+      ansible.builtin.fail:
+        msg: "Docker daemon on {{ inventory_hostname }} is not responding properly."
+      when: dockerHealth.rc != 0
+
+    - name: Print verification success message
+      ansible.builtin.debug:
+        msg: "Docker verification passed on {{ inventory_hostname }}."
+
+- import_playbook: ./Shared/ansible/init-swarm.yml
+- import_playbook: ./Shared/ansible/join-managers.yml
+- import_playbook: ./Shared/ansible/join-workers.yml
+- import_playbook: ./Shared/ansible/setup-registry.yml
+- import_playbook: ./Shared/ansible/generate-jwt-keys.yml
+- import_playbook: ./Shared/ansible/deploy-services.yml

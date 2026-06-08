@@ -1,0 +1,81 @@
+version: "3.8"
+
+services:
+  auth-db:
+    image: postgres:15-alpine
+
+    environment:
+      POSTGRES_USER: "{{ service.dbUser }}"
+      POSTGRES_PASSWORD: "{{ service.dbPassword }}"
+      POSTGRES_DB: "{{ service.dbName }}"
+
+    volumes:
+      - auth-db-data:/var/lib/postgresql/data/
+
+    networks:
+      - auth-net
+
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+
+  auth-service:
+    image: "{{ swarmRegistryAddr }}/{{ service.imageName }}:{{ service.imageTag }}"
+
+    ports:
+      - target: {{ service.internalPort }}
+        published: {{ service.publishedPort }}
+        protocol: tcp
+        mode: ingress
+
+    environment:
+      DB_HOST: auth-db
+      DB_PORT: "5432"
+      DB_NAME: "{{ service.dbName }}"
+      DB_USER: "{{ service.dbUser }}"
+      DB_PASSWD: "{{ service.dbPassword }}"
+
+      JWT_PRIVATE_KEY_PATH: "/run/secrets/{{ jwtPrivateKeySecretName }}"
+      JWT_PUBLIC_KEY_PATH: "/run/secrets/{{ jwtPublicKeySecretName }}"
+
+    networks:
+      - auth-net
+      - {{ sharedOverlayNetwork }}
+
+    secrets:
+      - source: {{ jwtPrivateKeySecretName }}
+        target: {{ jwtPrivateKeySecretName }}
+        mode: 0400
+
+      - source: {{ jwtPublicKeySecretName }}
+        target: {{ jwtPublicKeySecretName }}
+        mode: 0444
+
+    deploy:
+      replicas: {{ service.replicas }}
+      restart_policy:
+        condition: on-failure
+
+volumes:
+  auth-db-data:
+
+networks:
+  auth-net:
+    driver: overlay
+    internal: true
+    name: auth-net
+
+  {{ sharedOverlayNetwork }}:
+    external: true
+    name: {{ sharedOverlayNetwork }}
+
+secrets:
+  {{ jwtPrivateKeySecretName }}:
+    external: true
+
+  {{ jwtPublicKeySecretName }}:
+    external: true

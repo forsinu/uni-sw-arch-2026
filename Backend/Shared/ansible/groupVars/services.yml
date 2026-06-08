@@ -1,0 +1,21 @@
+---
+swarmServices:
+  - name: auth
+    stackName: auth
+
+    localSrc: "{{ localServiceRoot }}/AuthService"
+    remoteSrc: "{{ remoteServicesRoot }}/auth"
+
+    imageName: auth-service-img
+    imageTag: latest
+
+    composeTemplate: auth-stack.yml.j2
+    composeRemotePath: "{{ remoteStacksRoot }}/auth/docker-compose.yml"
+
+    replicas: 2
+    publishedPort: 8000
+    internalPort: 8000
+
+    dbName: auth_db
+    dbUser: auth_user
+    dbPassword: auth_password

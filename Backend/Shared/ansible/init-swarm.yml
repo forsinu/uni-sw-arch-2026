@@ -1,0 +1,33 @@
+- name: Initialize Docker Swarm Primary Manager
+  hosts: swarmManagers[0]
+  become: true
+  vars:
+    swarmAdvertiseAddr: "{{ swarmIp }}"
+ 
+
+  tasks:
+    - name: Check if already part of a swarm
+      community.docker.docker_swarm_info:
+      register: swarmInfo
+      ignore_errors: true
+
+    - name: Initialize swarm on first manager
+      community.docker.docker_swarm:
+        state: present
+        advertise_addr: "{{ swarmAdvertiseAddr }}"
+        listen_addr: "0.0.0.0:2377"
+      register: swarmInit
+      when: not (swarmInfo.docker_swarm_active | default(false))
+
+    - name: Get manager and worker join tokens
+      community.docker.docker_swarm_info:
+      register: swarmInfoFinal
+
+    - name: Share join tokens and manager address globally across the play
+      ansible.builtin.add_host:
+        name: "SWARM_TOKEN_HOLDER"
+        managerToken: "{{ swarmInfoFinal.swarm_facts.JoinTokens.Manager }}"
+        workerToken: "{{ swarmInfoFinal.swarm_facts.JoinTokens.Worker }}"
+        managerAddr: "{{ swarmAdvertiseAddr }}:2377"
+      
+      # run_once: true

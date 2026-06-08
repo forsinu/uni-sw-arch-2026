@@ -1,3 +1,4 @@
+import base64
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import secrets
@@ -8,9 +9,9 @@ import uuid
 from argon2 import PasswordHasher
 from argon2.exceptions import VerificationError
 from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.backends import default_backend
 
 import jwt
-from jwt.utils import to_base64url_uint
 from pydantic import BaseModel, BeforeValidator, field_serializer
 
 
@@ -47,36 +48,52 @@ class AccessTokenPayload(BaseModel):
 
 class SecurityHandler:
     ALPHABET = string.ascii_letters + string.digits
+    SWARM_SECRET_PATH = "/run/secrets/{secretName}"
 
     def __init__(self, env: EnvHandler):
         self.env = env
         self.ph = PasswordHasher()
 
-        self.__loadKeys()
+        self.privKeyPem = None
+        self.pubKeyPem = None
+        self._cachedJWK = None
 
-    def __loadKeys(self):
+        self.__loadSwarmKeys()
+
+    def __loadSwarmKeys(self):
+        privPath = Path(self.SWARM_SECRET_PATH.format(secretName="jwtPrivateKey"))
+        pubPath = Path(self.SWARM_SECRET_PATH.format(secretName="jwtPublicKey"))
+
+        if not privPath.exists() or not pubPath.exists():
+            raise RuntimeError("Missing required Swarm Secrets for JWT keys.")
+
+        with privPath.open() as f:
+            self.privKeyPem = f.read().encode("utf-8")
+
+        with pubPath.open() as f:
+            self.pubKeyPem = f.read().encode("utf-8")
+
         try:
-            privKeyPath = Path(self.env.PRIVATE_KEY_PATH)
-            pubKeyPath = Path(self.env.PUBLIC_KEY_PATH)
-
-            if not privKeyPath.exists() or not pubKeyPath.exists():
-                raise RuntimeError(
-                    f"Cryptographic keys missing! Paths checked: {privKeyPath} and {pubKeyPath}"
-                )
-
-            with open(privKeyPath, "rb") as keyFile:
-                self.privKeyPem = keyFile.read()
-                self.privKey = serialization.load_pem_private_key(
-                    self.privKeyPem, password=None
-                )
-
-            with open(pubKeyPath, "rb") as keyFile:
-                self.pubKeyPem = keyFile.read()
-
-        except Exception as e:
-            raise RuntimeError(
-                f"Critical failure initializing RSA Cryptography: {str(e)}"
+            keyObj = serialization.load_pem_public_key(
+                self.pubKeyPem, backend=default_backend()
             )
+            public_numbers = keyObj.public_numbers()
+
+            def int_to_base64url(num: int) -> str:
+                num_bytes = num.to_bytes((num.bit_length() + 7) // 8, byteorder="big")
+                return base64.urlsafe_b64encode(num_bytes).rstrip(b"=").decode("utf-8")
+
+            self._cachedJWK = {
+                "kty": "RSA",
+                "use": "sig",
+                "key_ops": ["verify"],
+                "alg": self.env.JWT_ALGORITHM,
+                "kid": "auth-service-key-v1",
+                "n": int_to_base64url(public_numbers.n),
+                "e": int_to_base64url(public_numbers.e),
+            }
+        except Exception as e:
+            raise RuntimeError(f"Failed to generate JWK from public key: {str(e)}")
 
     def generateRandomPassword(self, length: int) -> str:
         return "".join(secrets.choice(SecurityHandler.ALPHABET) for _ in range(length))
@@ -157,13 +174,4 @@ class SecurityHandler:
         )
 
     def generateJWKS(self):
-        pubNumbs = self.privKey.public_key().public_numbers()
-        jwk = {
-            "kty": "RSA",
-            "key_ops": ["verify"],
-            "alg": "RS256",
-            "kid": "auth-service-key-v1",
-            "n": to_base64url_uint(pubNumbs.n).decode("ascii"),
-            "e": to_base64url_uint(pubNumbs.e).decode("ascii"),
-        }
-        return {"keys": [jwk]}
+        return {"keys": [self._cachedPubKeyPem]}

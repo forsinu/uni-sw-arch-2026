@@ -1,0 +1,52 @@
+---
+- name: Create remote source directory for {{ service.name }}
+  ansible.builtin.file:
+    path: "{{ service.remoteSrc }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Copy {{ service.name }} source code from localhost to manager
+  ansible.builtin.copy:
+    src: "{{ service.localSrc }}/"
+    dest: "{{ service.remoteSrc }}/"
+    owner: root
+    group: root
+    mode: preserve
+
+- name: Build and push {{ service.name }} image
+  community.docker.docker_image:
+    name: "{{ swarmRegistryAddr }}/{{ service.imageName }}"
+    tag: "{{ service.imageTag }}"
+    source: build
+    build:
+      path: "{{ service.remoteSrc }}"
+      pull: true
+    push: true
+    force_source: true
+
+- name: Create stack directory for {{ service.name }}
+  ansible.builtin.file:
+    path: "{{ service.composeRemotePath | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Render compose stack file for {{ service.name }}
+  ansible.builtin.template:
+    src: "{{ service.composeTemplate }}"
+    dest: "{{ service.composeRemotePath }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Deploy {{ service.name }} stack
+  ansible.builtin.command: >
+    docker stack deploy
+    --with-registry-auth
+    -c {{ service.composeRemotePath }}
+    {{ service.stackName }}
+  register: stackDeploy
+  changed_when: "'Updating service' in stackDeploy.stdout or 'Creating service' in stackDeploy.stdout or 'Creating network' in stackDeploy.stdout"

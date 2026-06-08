@@ -1,0 +1,22 @@
+---
+primaryManager: "{{ groups['swarmManagers'][0] }}"
+primaryManagerIp: "{{ hostvars[primaryManager].swarmIp }}"
+
+swarmRegistryPort: 5000
+swarmRegistryAddr: "{{ primaryManagerIp }}:{{ swarmRegistryPort }}"
+
+remoteServicesRoot: /opt/swarm-services
+remoteStacksRoot: /opt/swarm-stacks
+
+sharedOverlayNetwork: shared-service-net
+
+localServiceRoot: /home/filippo/Documents/uni/uni-sw-arch/Backend/Services
+
+secretsRoot: /opt/swarm-secrets
+jwtPrivateKeyPath: "{{ secretsRoot }}/jwt_private.pem"
+jwtPublicKeyPath: "{{ secretsRoot }}/jwt_public.pem"
+
+jwtPrivateKeySecretName: jwtPrivateKey
+jwtPublicKeySecretName: jwtPublicKey
+
+jwtKeySize: 4096
