@@ -1,0 +1,59 @@
+---
+- name: Deploy RabbitMQ in Docker Swarm
+  hosts: swarmManagers[0]
+  become: true
+  vars_files:
+    - "{{ playbook_dir }}/groupVars/all.yml"
+    - "{{ playbook_dir }}/groupVars/vault.yml"
+
+  tasks:
+    - name: Create RabbitMQ stack directory
+      ansible.builtin.file:
+        path: "{{ rabbitmqStackPath | dirname }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Render RabbitMQ configuration file
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/templates/rabbitmq.conf.j2"
+        dest: "{{ rabbitmqConfigPath }}"
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+
+    - name: List existing Docker configs
+      ansible.builtin.command: docker config ls --format '{{ "{{" }}.Name{{ "}}" }}'
+      register: existingDockerConfigs
+      changed_when: false
+
+    - name: Remove old RabbitMQ Docker config
+      ansible.builtin.command: docker config rm {{ rabbitmqConfigName }}
+      when: rabbitmqConfigName in existingDockerConfigs.stdout_lines
+      ignore_errors: true
+
+    - name: Create RabbitMQ Docker config
+      ansible.builtin.command: docker config create {{ rabbitmqConfigName }} {{ rabbitmqConfigPath }}
+      no_log: true
+
+    - name: Render RabbitMQ stack file
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/templates/rabbitmq-stack.yml.j2"
+        dest: "{{ rabbitmqStackPath }}"
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+
+    - name: Deploy RabbitMQ stack
+      ansible.builtin.command: >
+        docker stack deploy
+        -c {{ rabbitmqStackPath }}
+        {{ rabbitmqStackName }}
+      register: rabbitmqDeploy
+      changed_when: >
+        'Creating service' in rabbitmqDeploy.stdout or
+        'Updating service' in rabbitmqDeploy.stdout or
+        'Creating network' in rabbitmqDeploy.stdout

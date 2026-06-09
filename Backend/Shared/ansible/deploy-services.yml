@@ -3,8 +3,8 @@
   hosts: swarmManagers[0]
   become: true
   vars_files:
-    - ./groupVars/services.yml
-    - ./groupVars/all.yml
+    - "{{ playbook_dir }}//groupVars/services.yml"
+    - "{{ playbook_dir }}/groupVars/all.yml"
 
   tasks:
     - name: Create Remote Services Root Directory
@@ -29,6 +29,8 @@
         driver: overlay
         scope: swarm
         attachable: true
+        driver_options:
+          encrypted: "true"
         state: present
 
     - name: Deploy all configured services

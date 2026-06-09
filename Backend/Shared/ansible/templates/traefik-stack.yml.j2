@@ -1,0 +1,56 @@
+version: "3.8"
+
+services:
+  traefik:
+    image: "{{ traefikImage }}"
+
+    command:
+      - "--log.level=DEBUG"
+
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.traefik.address=:8080"
+
+      - "--providers.swarm=true"
+      - "--providers.swarm.endpoint=unix:///var/run/docker.sock"
+      - "--providers.swarm.exposedbydefault=false"
+      - "--providers.swarm.network={{ traefikNetwork }}"
+      - "--providers.swarm.watch=true"
+
+    ports:
+      - target: 80
+        published: {{ traefikHttpPort }}
+        protocol: tcp
+        mode: ingress
+
+      - target: 443
+        published: {{ traefikHttpsPort }}
+        protocol: tcp
+        mode: ingress
+
+      - target: 8080
+        published: {{ traefikDashboardPort }}
+        protocol: tcp
+        mode: ingress
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+    networks:
+      - {{ traefikNetwork }}
+
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+
+networks:
+  {{ traefikNetwork }}:
+    external: true
+    name: {{ traefikNetwork }}

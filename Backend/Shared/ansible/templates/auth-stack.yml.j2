@@ -1,7 +1,7 @@
 version: "3.8"
 
 services:
-  db:
+  auth-db:
     image: postgres:15-alpine
 
     environment:
@@ -28,24 +28,23 @@ services:
       restart_policy:
         condition: on-failure
 
-  service:
+  auth-service:
     image: "{{ swarmRegistryAddr }}/{{ service.imageName }}:{{ service.imageTag }}"
 
-    ports:
-      - target: {{ service.internalPort }}
-        published: {{ service.publishedPort }}
-        protocol: tcp
-        mode: ingress
-
     environment:
-      DB_HOST: db
+      DB_HOST: auth-db
       DB_PORT: "5432"
       DB_NAME: "{{ service.dbName }}"
       DB_USER: "{{ service.dbUser }}"
       DB_PASSWD_FILE: "/run/secrets/{{ authDbPasswordSecretName }}"
 
-      JWT_PRIVATE_KEY_PATH: "/run/secrets/{{ jwtPrivateKeySecretName }}"
-      JWT_PUBLIC_KEY_PATH: "/run/secrets/{{ jwtPublicKeySecretName }}"
+      PRIVATE_KEY_PATH: "/run/secrets/{{ jwtPrivateKeySecretName }}"
+      PUBLIC_KEY_PATH: "/run/secrets/{{ jwtPublicKeySecretName }}"
+
+      RABBITMQ_HOST: rabbitmq_rabbitmq
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_USER_FILE: "/run/secrets/{{ rabbitmqUserSecretName }}"
+      RABBITMQ_PASSWORD_FILE: "/run/secrets/{{ rabbitmqPasswordSecretName }}"
 
     networks:
       - auth-net
@@ -64,10 +63,28 @@ services:
         target: {{ jwtPublicKeySecretName }}
         mode: 0444
 
+      - source: {{ rabbitmqUserSecretName }}
+        target: {{ rabbitmqUserSecretName }}
+        mode: 0400
+
+      - source: {{ rabbitmqPasswordSecretName }}
+        target: {{ rabbitmqPasswordSecretName }}
+        mode: 0400
+
     deploy:
       replicas: {{ service.replicas }}
       restart_policy:
         condition: on-failure
+      labels:
+        - "traefik.enable={{ service.traefik.enabled | default(true) | string | lower }}"
+        - "traefik.swarm.network={{ sharedOverlayNetwork }}"
+        - "traefik.http.routers.{{ service.traefik.routerName }}.rule={{ service.traefik.rule }}"
+        - "traefik.http.routers.{{ service.traefik.routerName }}.entrypoints={{ service.traefik.entrypoint | default('web') }}"
+        - "traefik.http.services.{{ service.traefik.routerName }}.loadbalancer.server.port={{ service.internalPort }}"
+{% if service.traefik.stripPrefix | default(false) %}
+        - "traefik.http.middlewares.{{ service.traefik.stripPrefixMiddlewareName }}.stripprefix.prefixes=/{{ service.traefik.routerName }}"
+        - "traefik.http.routers.{{ service.traefik.routerName }}.middlewares={{ service.traefik.stripPrefixMiddlewareName }}"
+{% endif %}
 
 volumes:
   auth-db-data:
@@ -90,4 +107,10 @@ secrets:
     external: true
 
   {{ jwtPublicKeySecretName }}:
+    external: true
+
+  {{ rabbitmqUserSecretName }}:
+    external: true
+
+  {{ rabbitmqPasswordSecretName }}:
     external: true

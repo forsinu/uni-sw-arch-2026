@@ -27,6 +27,8 @@
 - import_playbook: ./Shared/ansible/join-managers.yml
 - import_playbook: ./Shared/ansible/join-workers.yml
 - import_playbook: ./Shared/ansible/setup-registry.yml
-- import_playbook: ./Shared/ansible/deploy-portainer.yml
 - import_playbook: ./Shared/ansible/generate-secrets.yml
+- import_playbook: ./Shared/ansible/deploy-traefik.yml
+- import_playbook: ./Shared/ansible/deploy-rabbitmq.yml
+- import_playbook: ./Shared/ansible/deploy-portainer.yml
 - import_playbook: ./Shared/ansible/deploy-services.yml

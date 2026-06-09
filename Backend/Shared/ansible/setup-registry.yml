@@ -3,7 +3,7 @@
   hosts: swarm
   become: true
   vars_files:
-    - ./groupVars/all.yml
+    - "{{ playbook_dir }}/groupVars/all.yml"
 
   tasks:
     - name: Configure insecure registry for Local Swarm Registry
@@ -28,7 +28,7 @@
   hosts: swarmManagers[0]
   become: true
   vars_files:
-    - ./groupVars/all.yml
+    - "{{ playbook_dir }}/groupVars/all.yml"
 
   tasks:
     - name: Check if registry service already exists

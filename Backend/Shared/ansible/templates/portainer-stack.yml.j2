@@ -28,15 +28,17 @@ services:
       - "--tlsskipverify"
       - "--admin-password"
       - "{{ portainerAdminPasswordHash }}"
+      - "--base-url"
+      - "{{ portainerPathPrefix }}"
 
     ports:
-      - target: 9443
-        published: {{ portainerHttpsPort }}
+      - target: 9000
+        published: {{ portainerHttpPort }}
         protocol: tcp
         mode: ingress
 
-      - target: 9000
-        published: {{ portainerHttpPort }}
+      - target: 9443
+        published: {{ portainerHttpsPort }}
         protocol: tcp
         mode: ingress
 
@@ -45,6 +47,7 @@ services:
 
     networks:
       - portainer-agent-network
+      - {{ sharedOverlayNetwork }}
 
     deploy:
       replicas: 1
@@ -53,11 +56,27 @@ services:
           - node.role == manager
       restart_policy:
         condition: on-failure
+      labels:
+        traefik.enable: "true"
+        traefik.swarm.network: "{{ sharedOverlayNetwork }}"
+
+        traefik.http.routers.portainer-router.rule: "PathPrefix(`{{ portainerPathPrefix }}`)"
+        traefik.http.routers.portainer-router.entrypoints: "web"
+        traefik.http.routers.portainer-router.service: "portainer-svc"
+
+        traefik.http.services.portainer-svc.loadbalancer.server.port: "{{ portainerInternalPort }}"
+
+        traefik.http.middlewares.portainer-strip-prefix.stripprefix.prefixes: "{{ portainerPathPrefix }}"
+        traefik.http.routers.portainer-router.middlewares: "portainer-strip-prefix"
 
 networks:
   portainer-agent-network:
     driver: overlay
     attachable: true
+
+  {{ sharedOverlayNetwork }}:
+    external: true
+    name: {{ sharedOverlayNetwork }}
 
 volumes:
   portainer-data:

@@ -13,8 +13,15 @@ swarmServices:
     composeRemotePath: "{{ remoteStacksRoot }}/auth/docker-compose.yml"
 
     replicas: "{{ authReplicas }}"
-    publishedPort: "{{ authPublishedPort }}"
     internalPort: "{{ authInternalPort }}"
 
     dbName: "{{ authDbName }}"
     dbUser: "{{ authDbUser }}"
+
+    traefik:
+      enabled: true
+      routerName: auth
+      rule: "PathPrefix(`/auth`)"
+      entrypoint: web
+      stripPrefix: true
+      stripPrefixMiddlewareName: auth-strip-prefix

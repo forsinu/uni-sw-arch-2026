@@ -1,0 +1,44 @@
+version: "3.8"
+
+services:
+  rabbitmq:
+    image: "{{ rabbitmqImage }}"
+    hostname: rabbitmq
+
+    configs:
+      - source: {{ rabbitmqConfigName }}
+        target: /etc/rabbitmq/rabbitmq.conf
+        mode: 0444
+
+    volumes:
+      - {{ rabbitmqDataVolume }}:/var/lib/rabbitmq
+
+    networks:
+      - {{ sharedOverlayNetwork }}
+
+    deploy:
+      replicas: 1
+      placement:
+        constraints:
+          - node.role == manager
+      restart_policy:
+        condition: on-failure
+      labels:
+        - "traefik.enable=true"
+        - "traefik.swarm.network={{ sharedOverlayNetwork }}"
+        - "traefik.http.routers.rabbitmq.rule=PathPrefix(`{{ rabbitmqManagementPathPrefix }}`)"
+        - "traefik.http.routers.rabbitmq.entrypoints=web"
+        - "traefik.http.routers.rabbitmq.service=rabbitmq"
+        - "traefik.http.services.rabbitmq.loadbalancer.server.port={{ rabbitmqInternalManagementPort }}"
+
+volumes:
+  {{ rabbitmqDataVolume }}:
+
+networks:
+  {{ sharedOverlayNetwork }}:
+    external: true
+    name: {{ sharedOverlayNetwork }}
+
+configs:
+  {{ rabbitmqConfigName }}:
+    external: true
