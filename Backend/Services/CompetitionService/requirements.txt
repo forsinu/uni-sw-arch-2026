@@ -1,0 +1,11 @@
+fastapi[all]
+fastapi_mail
+sqlalchemy
+sqlalchemy[asyncio]
+asyncpg
+pydantic
+pydantic-settings
+pyjwt
+pytest
+pytest-asyncio
+httpx

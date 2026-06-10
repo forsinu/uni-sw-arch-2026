@@ -1,0 +1,46 @@
+services:
+  competition-db:
+    # container_name: competition-db
+    image: postgres:15-alpine
+    
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWD}
+      POSTGRES_DB: ${DB_NAME}
+
+    # FOR DEBUGGING
+    # ports:
+    #   - ${DB_PORT}:5432
+
+    volumes:
+      - competition-db-data:/var/lib/postgresql/data/
+
+    networks:
+      - competition-net
+    
+    restart: unless-stopped
+
+  competition-service:
+    build: .
+    restart: unless-stopped
+
+    ports:
+      - ${SERVICE_PORT}:8000
+
+    depends_on:
+      - competition-db
+
+    networks:
+      - competition-net
+      - shared-mesh
+
+
+volumes:
+  competition-db-data:
+
+networks:
+  competition-net:
+    driver: bridge
+
+  shared-mesh:
+    external: true
