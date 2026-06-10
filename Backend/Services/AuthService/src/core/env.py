@@ -11,6 +11,8 @@ class EnvHandler(BaseSettings):
         extra="ignore",
         env_file=".env",
     )
+    
+    API_PREFIX: str
 
     PRIVATE_KEY_PATH: str
     PUBLIC_KEY_PATH: str

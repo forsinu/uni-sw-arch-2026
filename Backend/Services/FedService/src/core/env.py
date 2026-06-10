@@ -17,7 +17,7 @@ class EnvHandler(BaseSettings):
 
     API_PREFIX: str
 
-    AUTH_HOST: str = "federatuib-service"
+    AUTH_HOST: str = "auth-service"
     AUTH_PORT: int = 8000
     AUTH_PUB_KEY_PATH: str = ".well-known/jwks.json"
     JWT_ALGORITHM: str = "RS256"
@@ -26,30 +26,7 @@ class EnvHandler(BaseSettings):
     DB_NAME: str = "federation_db"
 
     DB_USER: str
-    # Local development fallback
-    DB_PASSWD: str | None = None
-
-    # Docker Swarm secret path
-    DB_PASSWD_FILE: str | None = None
-
-    def _read_secret_file(self, path: str) -> str:
-        secret_path = Path(path)
-
-        if not secret_path.exists():
-            raise FileNotFoundError(f"Secret file not found: {path}")
-
-        return secret_path.read_text(encoding="utf-8").strip()
-
-    @computed_field
-    @property
-    def DB_PASSWORD(self) -> str:
-        if self.DB_PASSWD_FILE:
-            return self._read_secret_file(self.DB_PASSWD_FILE)
-
-        if self.DB_PASSWD:
-            return self.DB_PASSWD
-
-        raise ValueError("Either DB_PASSWD_FILE or DB_PASSWD must be provided")
+    DB_PASSWD: str
 
     @computed_field
     @property
@@ -59,7 +36,7 @@ class EnvHandler(BaseSettings):
             host=self.DB_HOST,
             port=5432,
             username=self.DB_USER,
-            password=self.DB_PASSWORD,
+            password=self.DB_PASSWD,
             path=self.DB_NAME,
         )
 

@@ -34,6 +34,8 @@ services:
       PRIVATE_KEY_PATH: ${JWT_PRIVATE_KEY_CONTAINER_PATH}
       PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_CONTAINER_PATH}
 
+      API_PREFIX: ${AUTH_API_PREFIX}
+
     volumes:
       - ${JWT_PRIVATE_KEY_HOST_PATH}:${JWT_PRIVATE_KEY_CONTAINER_PATH}:ro
       - ${JWT_PUBLIC_KEY_HOST_PATH}:${JWT_PUBLIC_KEY_CONTAINER_PATH}:ro
@@ -95,10 +97,7 @@ services:
       AUTH_PORT: 8000
 
       JWT_ALGORITHM: ${JWT_ALGORITHM}
-      PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_CONTAINER_PATH}
-
-    volumes:
-      - ${JWT_PUBLIC_KEY_HOST_PATH}:${JWT_PUBLIC_KEY_CONTAINER_PATH}:ro
+      API_PREFIX: ${FEDERATION_API_PREFIX}
 
     depends_on:
       - federation-db
@@ -123,15 +122,79 @@ services:
 
     restart: unless-stopped
 
+  competition-db:
+    image: postgres:15-alpine
+
+    environment:
+      POSTGRES_USER: ${DB_COMPETITION_USER}
+      POSTGRES_PASSWORD: ${DB_COMPETITION_PASSWD}
+      POSTGRES_DB: ${DB_COMPETITION_NAME}
+
+    volumes:
+      - competition-db-data:/var/lib/postgresql/data/
+
+    networks:
+      - competition-net
+
+    restart: unless-stopped
+
+  competition-service:
+    build:
+      context: ${COMPETITION_SERVICE_DIR}
+      dockerfile: Dockerfile
+
+    env_file:
+      - ./Services/CompetitionService/.env
+
+    environment:
+      DB_HOST: competition-db
+      DB_PORT: 5432
+      DB_NAME: ${DB_COMPETITION_NAME}
+      DB_USER: ${DB_COMPETITION_USER}
+      DB_PASSWD: ${DB_COMPETITION_PASSWD}
+
+      AUTH_HOST: auth-service
+      AUTH_PORT: 8000
+
+      JWT_ALGORITHM: ${JWT_ALGORITHM}
+      API_PREFIX: ${COMPETITION_API_PREFIX}
+
+    depends_on:
+      - competition-db
+      - auth-service
+
+    networks:
+      - competition-net
+      - service-mesh-net
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=service-mesh-net"
+
+      - "traefik.http.routers.competition.rule=Host(`app.docker.localhost`) && PathPrefix(`/competition`)"
+      - "traefik.http.routers.competition.entrypoints=websecure"
+      - "traefik.http.routers.competition.tls=true"
+
+      - "traefik.http.services.competition.loadbalancer.server.port=8000"
+
+      - "traefik.http.middlewares.competition-strip.stripprefix.prefixes=/competition"
+      - "traefik.http.routers.competition.middlewares=competition-strip"
+
+    restart: unless-stopped
+
 volumes:
   auth-db-data:
   federation-db-data:
+  competition-db-data:
 
 networks:
   auth-net:
     driver: bridge
 
   federation-net:
+    driver: bridge
+
+  competition-net:
     driver: bridge
 
   service-mesh-net:

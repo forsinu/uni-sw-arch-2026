@@ -14,6 +14,8 @@ class EnvHandler(BaseSettings):
         env_file=".env",
     )
 
+    API_PREFIX: str
+
     DB_HOST: str = "competition-db"
     DB_NAME: str = "competition_db"
 
