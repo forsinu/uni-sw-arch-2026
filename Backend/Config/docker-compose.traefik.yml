@@ -1,0 +1,82 @@
+services:
+  traefik:
+    image: traefik:v3.7
+    container_name: traefik
+
+    networks:
+      - service-mesh-net
+
+    ports:
+      - "80:80"
+      - "443:443"
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./Config/certs:/certs:ro
+      - ./Config/dynamic:/dynamic:ro
+
+    command:
+      - "--entrypoints.web.address=:80"
+
+      - "--entrypoints.web.http.redirections.entrypoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--entrypoints.web.http.redirections.entrypoint.permanent=true"
+
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.websecure.http.tls=true"
+
+      - "--providers.file.filename=/dynamic/tls.yaml"
+
+      - "--providers.docker=true"
+      - "--providers.docker.endpoint=unix:///var/run/docker.sock"
+      - "--providers.docker.watch=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.network=service-mesh-net"
+
+      - "--api.dashboard=true"
+      - "--api.insecure=false"
+
+      - "--log.level=INFO"
+      - "--accesslog=true"
+      - "--metrics.prometheus=true"
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=service-mesh-net"
+
+      - "traefik.http.routers.dashboard.rule=Host(`dashboard.docker.localhost`)"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.tls=true"
+
+      # Enable these only if PASSWORD_HASH is exported before docker compose up.
+      # - "traefik.http.middlewares.dashboard-auth.basicauth.users=${PASSWORD_HASH}"
+      # - "traefik.http.routers.dashboard.middlewares=dashboard-auth@docker"
+
+      - "traefik.http.services.traefik.loadbalancer.server.port=8080"
+
+    restart: unless-stopped
+
+  whoami:
+    image: traefik/whoami
+    container_name: whoami
+
+    networks:
+      - service-mesh-net
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=service-mesh-net"
+
+      - "traefik.http.routers.whoami.rule=Host(`whoami.docker.localhost`)"
+      - "traefik.http.routers.whoami.entrypoints=websecure"
+      - "traefik.http.routers.whoami.tls=true"
+
+      - "traefik.http.services.whoami.loadbalancer.server.port=80"
+
+    restart: unless-stopped
+
+networks:
+  service-mesh-net:
+    external: true
+    name: service-mesh-net

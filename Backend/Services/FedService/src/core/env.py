@@ -1,7 +1,10 @@
 from pathlib import Path
+from pydantic_settings import (
+    BaseSettings,
+    SettingsConfigDict,
+)
 
-from pydantic import PostgresDsn, computed_field
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import PostgresDsn, computed_field, AnyHttpUrl
 
 
 class EnvHandler(BaseSettings):
@@ -12,23 +15,17 @@ class EnvHandler(BaseSettings):
         env_file=".env",
     )
 
-    PRIVATE_KEY_PATH: str
-    PUBLIC_KEY_PATH: str
+    API_PREFIX: str
 
+    AUTH_HOST: str = "federatuib-service"
+    AUTH_PORT: int = 8000
+    AUTH_PUB_KEY_PATH: str = ".well-known/jwks.json"
     JWT_ALGORITHM: str = "RS256"
-    JWT_KEY_SIZE: int = 4096
 
-    AT_EXP_MIN: int = 15
-    RT_EXP_MIN: int = 5040
-
-    PASSWORD_LEN: int = 16
-    MAX_SESSIONS: int = 3
-
-    DB_HOST: str = "auth-db"
-    DB_NAME: str = "auth_db"
+    DB_HOST: str = "federation-db"
+    DB_NAME: str = "federation_db"
 
     DB_USER: str
-
     # Local development fallback
     DB_PASSWD: str | None = None
 
@@ -65,5 +62,21 @@ class EnvHandler(BaseSettings):
             password=self.DB_PASSWORD,
             path=self.DB_NAME,
         )
+
+        return str(url)
+
+    @computed_field
+    @property
+    def AUTH_JWKS_URL(self) -> str:
+        baseHost = self.AUTH_HOST.rstrip("/")
+        cleanPath = self.AUTH_PUB_KEY_PATH.strip("/")
+        url = AnyHttpUrl.build(
+            scheme="http",
+            host=baseHost,
+            port=self.AUTH_PORT,
+            path=cleanPath,
+        )
+
+        print(str(url))
 
         return str(url)

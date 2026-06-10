@@ -1,0 +1,35 @@
+services:
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+
+    command:
+      - "-H"
+      - "unix:///var/run/docker.sock"
+
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer-data:/data
+
+    networks:
+      - service-mesh-net
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=service-mesh-net"
+
+      - "traefik.http.routers.portainer.rule=Host(`portainer.docker.localhost`)"
+      - "traefik.http.routers.portainer.entrypoints=websecure"
+      - "traefik.http.routers.portainer.tls=true"
+
+      - "traefik.http.services.portainer.loadbalancer.server.port=9000"
+
+    restart: unless-stopped
+
+volumes:
+  portainer-data:
+
+networks:
+  service-mesh-net:
+    external: true
+    name: service-mesh-net

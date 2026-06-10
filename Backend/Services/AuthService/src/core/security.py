@@ -48,7 +48,6 @@ class AccessTokenPayload(BaseModel):
 
 class SecurityHandler:
     ALPHABET = string.ascii_letters + string.digits
-    SWARM_SECRET_PATH = "/run/secrets/{secretName}"
 
     def __init__(self, env: EnvHandler):
         self.env = env
@@ -61,8 +60,8 @@ class SecurityHandler:
         self.__loadSwarmKeys()
 
     def __loadSwarmKeys(self):
-        privPath = Path(self.SWARM_SECRET_PATH.format(secretName="jwtPrivateKey"))
-        pubPath = Path(self.SWARM_SECRET_PATH.format(secretName="jwtPublicKey"))
+        privPath = Path(self.env.PRIVATE_KEY_PATH)
+        pubPath = Path(self.env.PUBLIC_KEY_PATH)
 
         if not privPath.exists() or not pubPath.exists():
             raise RuntimeError("Missing required Swarm Secrets for JWT keys.")
@@ -174,4 +173,4 @@ class SecurityHandler:
         )
 
     def generateJWKS(self):
-        return {"keys": [self._cachedPubKeyPem]}
+        return {"keys": [self._cachedJWK]}

@@ -1,8 +1,0 @@
----
-vaultAuthDbPassword: "auth_password"
-
-vaultPortainerAdminUser: "admin"
-vaultPortainerAdminPassword: "ChangeMeStrongPassword123!"
-
-vaultRabbitmqUser: "rabbitmqUser"
-vaultRabbitmqPassword: "ChangeMeRabbitPassword123!"
