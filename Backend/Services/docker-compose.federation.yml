@@ -1,0 +1,123 @@
+services:
+  federation-db:
+    image: postgres:15-alpine
+
+    environment:
+      POSTGRES_USER: ${DB_FEDERATION_USER}
+      POSTGRES_PASSWORD: ${DB_FEDERATION_PASSWD}
+      POSTGRES_DB: ${DB_FEDERATION_NAME}
+
+    volumes:
+      - federation-db-data:/var/lib/postgresql/data/
+
+    networks:
+      - federation-net
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${DB_FEDERATION_USER} -d ${DB_FEDERATION_NAME}",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+    restart: unless-stopped
+
+  federation-service:
+    build:
+      context: ${FEDERATION_SERVICE_DIR}
+      dockerfile: Dockerfile
+
+    container_name: ${FEDERATION_SERVICE_HOSTNAME}
+    hostname: ${FEDERATION_SERVICE_HOSTNAME}
+
+    env_file:
+      - ./Services/FederationService/.env
+
+    volumes:
+      - ${HOST_SERVICE_TOKEN_PATH}:${CONTAINER_SERVICE_TOKEN_PATH}:ro
+
+    environment:
+      DB_HOST: federation-db
+      DB_PORT: 5432
+      DB_NAME: ${DB_FEDERATION_NAME}
+      DB_USER: ${DB_FEDERATION_USER}
+      DB_PASSWD: ${DB_FEDERATION_PASSWD}
+
+      AUTH_HOST: ${AUTH_SERVICE_HOSTNAME}
+      AUTH_PORT: ${AUTH_SERVICE_PORT}
+
+      LOG_LEVEL: ${FEDERATION_LOG_LEVEL}
+      APP_LOGGER_NAME: ${FEDERATION_APP_LOGGER_NAME}
+      LOGGER_HANDLER_NAME: ${FEDERATION_LOGGER_HANDLER_NAME}
+      DB_LOGGER_NAME: ${FEDERATION_DB_LOGGER_NAME}
+      ROUTING_LOGGER_NAME: ${FEDERATION_ROUTING_LOGGER_NAME}
+
+      ROUTING_LOG_REQUESTS: ${FEDERATION_ROUTING_LOG_REQUESTS}
+      ROUTING_LOG_RESPONSES: ${FEDERATION_ROUTING_LOG_RESPONSES}
+
+      JWT_ALGORITHM: ${JWT_ALGORITHM}
+      JWT_KEY_ID: ${JWT_KEY_ID}
+      JWT_PUBLIC_KEY_SERVICE_PATH: ${JWT_PUBLIC_KEY_SERVICE_PATH}
+      SERVICE_TOKEN_PATH: ${CONTAINER_SERVICE_TOKEN_PATH}
+
+      API_PREFIX: ${FEDERATION_API_PREFIX}
+      API_VERSION: ${FEDERATION_API_VERSION}
+
+      RABBITMQ_SERVICE_PORT: ${RABBITMQ_SERVICE_PORT}
+      RABBITMQ_SERVICE_USER: ${RABBITMQ_SERVICE_USER}
+      RABBITMQ_SERVICE_PASSWORD: ${RABBITMQ_SERVICE_PASSWORD}
+      RABBITMQ_SERVICE_VHOST: ${RABBITMQ_SERVICE_VHOST}
+      RABBITMQ_SERVICE_HOST: ${RABBITMQ_SERVICE_HOST}
+
+    depends_on:
+      - federation-db
+
+    networks:
+      - federation-net
+      - service-mesh-net
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=service-mesh-net"
+
+      - "traefik.http.routers.federation-internal-block.rule=Host(`app.docker.localhost`) && PathPrefix(`/fed/api/v1/internal`)"
+      - "traefik.http.routers.federation-internal-block.entrypoints=websecure"
+      - "traefik.http.routers.federation-internal-block.tls=true"
+      - "traefik.http.routers.federation-internal-block.priority=1000"
+      - "traefik.http.routers.federation-internal-block.service=noop@internal"
+
+      - "traefik.http.routers.federation.rule=Host(`app.docker.localhost`) && PathPrefix(`/fed`)"
+      - "traefik.http.routers.federation.entrypoints=websecure"
+      - "traefik.http.routers.federation.tls=true"
+
+      - "traefik.http.services.federation.loadbalancer.server.port=8000"
+
+      - "traefik.http.middlewares.federation-strip.stripprefix.prefixes=/fed"
+      - "traefik.http.routers.federation.middlewares=federation-strip"
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\"",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+    restart: unless-stopped
+
+volumes:
+  federation-db-data:
+
+networks:
+  federation-net:
+    driver: bridge
+
+  service-mesh-net:
+    external: true
+    name: service-mesh-net

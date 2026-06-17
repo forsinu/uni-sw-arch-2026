@@ -7,7 +7,9 @@ ENV PIP_ROOT_USER_ACTION=ignore \
 
 WORKDIR /service
 
-RUN apt-get update && apt-get upgrade -y
+RUN apt-get update \
+    && apt-get upgrade -y \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .
 
@@ -15,4 +17,4 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-CMD uvicorn src.main:app --host 0.0.0.0 --port 8000
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]

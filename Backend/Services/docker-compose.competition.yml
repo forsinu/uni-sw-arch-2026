@@ -1,0 +1,131 @@
+services:
+  competition-db:
+    image: postgres:15-alpine
+    container_name: competition-db
+
+    environment:
+      POSTGRES_USER: ${DB_COMPETITION_USER}
+      POSTGRES_PASSWORD: ${DB_COMPETITION_PASSWD}
+      POSTGRES_DB: ${DB_COMPETITION_NAME}
+
+    volumes:
+      - competition-db-data:/var/lib/postgresql/data/
+
+    networks:
+      - competition-net
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${DB_COMPETITION_USER} -d ${DB_COMPETITION_NAME}",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+    restart: unless-stopped
+
+  competition-service:
+    build:
+      context: ${COMPETITION_SERVICE_DIR}
+      dockerfile: Dockerfile
+
+    container_name: ${COMPETITION_SERVICE_HOSTNAME}
+    hostname: ${COMPETITION_SERVICE_HOSTNAME}
+
+    volumes:
+      - ${HOST_SERVICE_TOKEN_PATH}:${CONTAINER_SERVICE_TOKEN_PATH}:ro
+
+    env_file:
+      - ./Services/CompetitionService/.env
+
+    environment:
+      DB_HOST: competition-db
+      DB_PORT: 5432
+      DB_NAME: ${DB_COMPETITION_NAME}
+      DB_USER: ${DB_COMPETITION_USER}
+      DB_PASSWD: ${DB_COMPETITION_PASSWD}
+
+      AUTH_HOST: ${AUTH_SERVICE_HOSTNAME}
+      AUTH_PORT: ${AUTH_SERVICE_PORT}
+
+      # LIVE_RESULT_HOST: ${LIVE_RESULT_SERVICE_HOSTNAME}
+      # LIVE_RESULT_PORT: 8000
+
+      API_PREFIX: ${COMPETITION_API_PREFIX}
+      API_VERSION: ${COMPETITION_API_VERSION}
+
+      JWT_ALGORITHM: ${JWT_ALGORITHM}
+      JWT_KEY_ID: ${JWT_KEY_ID}
+      JWT_PUBLIC_KEY_SERVICE_PATH: ${JWT_PUBLIC_KEY_SERVICE_PATH}
+
+      RABBITMQ_SERVICE_HOST: ${RABBITMQ_SERVICE_HOST}
+      RABBITMQ_SERVICE_PORT: ${RABBITMQ_SERVICE_PORT}
+      RABBITMQ_SERVICE_USER: ${RABBITMQ_SERVICE_USER}
+      RABBITMQ_SERVICE_PASSWORD: ${RABBITMQ_SERVICE_PASSWORD}
+      RABBITMQ_SERVICE_VHOST: ${RABBITMQ_SERVICE_VHOST}
+
+      SERVICE_TOKEN_PATH: ${CONTAINER_SERVICE_TOKEN_PATH}
+
+      LOG_LEVEL: ${COMPETITION_LOG_LEVEL}
+      APP_LOGGER_NAME: ${COMPETITION_APP_LOGGER_NAME}
+      LOGGER_HANDLER_NAME: ${COMPETITION_LOGGER_HANDLER_NAME}
+      DB_LOGGER_NAME: ${COMPETITION_DB_LOGGER_NAME}
+      ROUTING_LOGGER_NAME: ${COMPETITION_ROUTING_LOGGER_NAME}
+      ROUTING_LOG_REQUESTS: ${COMPETITION_ROUTING_LOG_REQUESTS}
+      ROUTING_LOG_RESPONSES: ${COMPETITION_ROUTING_LOG_RESPONSES}
+
+    depends_on:
+      competition-db:
+        condition: service_healthy
+
+    networks:
+      - competition-net
+      - service-mesh-net
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=service-mesh-net"
+
+
+      - "traefik.http.routers.competition-internal-block.rule=Host(`app.docker.localhost`) && PathPrefix(`/comp/api/v1/internal`)"
+      - "traefik.http.routers.competition-internal-block.entrypoints=websecure"
+      - "traefik.http.routers.competition-internal-block.tls=true"
+      - "traefik.http.routers.competition-internal-block.priority=1000"
+      - "traefik.http.routers.competition-internal-block.service=noop@internal"
+
+
+      - "traefik.http.routers.competition.rule=Host(`app.docker.localhost`) && PathPrefix(`/comp`)"
+      - "traefik.http.routers.competition.entrypoints=websecure"
+      - "traefik.http.routers.competition.tls=true"
+      - "traefik.http.routers.competition.priority=10"
+
+      - "traefik.http.services.competition.loadbalancer.server.port=8000"
+
+      - "traefik.http.middlewares.competition-strip.stripprefix.prefixes=/comp"
+      - "traefik.http.routers.competition.middlewares=competition-strip"
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\"",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+    restart: unless-stopped
+
+volumes:
+  competition-db-data:
+
+networks:
+  competition-net:
+    driver: bridge
+
+  service-mesh-net:
+    external: true
+    name: service-mesh-net

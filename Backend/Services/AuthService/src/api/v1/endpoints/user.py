@@ -1,53 +1,66 @@
-from datetime import datetime
-from typing import Annotated, Optional
-import uuid
-from fastapi import APIRouter, Depends, HTTPException, Response, status, Query
+# src/api/v1/user.py
 
-from sqlalchemy import func, select, update
+from datetime import datetime
+from typing import Annotated
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.schema.user import (
+from src.api.dependencies import (
+    accessHandler,
+    databaseHandler,
+    dbSessionHandler,
+    loginAttemptRepositoryHandler,
+    refreshTokenRepositoryHandler,
+    securityHandler,
+    timeHandler,
+    userAccountHistoryRepositoryHandler,
+    userAccountRepositoryHandler,
+)
+from src.core.sec import AccessTokenPayload, SecurityHandler
+from src.db.models.user_account import UserAccountStatus
+from src.db.repositories import (
+    LoginAttemptRepository,
+    RefreshTokenRepository,
+    UserAccountHistoryRepository,
+    UserAccountRepository,
+)
+from src.db.session import DatabaseHandler
+from src.schemas.user import (
     DeleteUserReq,
     PaginatedLoginAttemptResp,
     PaginatedRefreshTokenResp,
     RefreshTokenResp,
-    UserAccountResp,
     ResetPasswdReq,
-)
-from src.db.models.refresh_token import RefreshToken
-from src.db.models.login_attempt import LoginAttempt
-from src.db.models.user_account import (
-    UserAccount,
-    UserAccountHistory,
-    UserAccountStatus,
+    UserAccountResp,
 )
 
-from src.core.util import handleDbOp
-from src.core.security import AccessTokenPayload, SecurityHandler
-from src.api.dependencies import accessHandler, dbHandler, secHandler, timeHandler
+from src.schemas.common import MessageResp
 
 
-router = APIRouter()
+router = APIRouter(
+    prefix="/users",
+    tags=["Users"],
+)
 
 
-@router.get("/me", response_model=UserAccountResp, status_code=status.HTTP_200_OK)
-async def userInfo(
-    db: Annotated[AsyncSession, Depends(dbHandler)],
-    at: Annotated[AccessTokenPayload, Depends(accessHandler)],
+@router.get(
+    "/me",
+    response_model=UserAccountResp,
+    status_code=status.HTTP_200_OK,
+    operation_id="getCurrentUser",
+)
+async def getCurrentUser(
+    accessToken: Annotated[AccessTokenPayload, Depends(accessHandler)],
+    userRepository: Annotated[
+        UserAccountRepository,
+        Depends(userAccountRepositoryHandler),
+    ],
 ):
-    query = select(UserAccount).where(
-        UserAccount.id == at.sub,
-        UserAccount.accountStatus == UserAccountStatus.ACTIVE,
-    )
+    user = await userRepository.getUserById(accessToken.sub, isActive=True)
 
-    async with handleDbOp(
-        session=db, errorMsg="Internal Server Error fetching profile."
-    ):
-        result = await db.execute(query)
-        user = result.scalar_one_or_none()
-
-    # A user could possess a valid token for a deactivated account!
-    if not user:
+    if user is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="User profile not found or account is no longer active.",
@@ -56,104 +69,168 @@ async def userInfo(
     return user
 
 
-@router.delete("/me", status_code=status.HTTP_202_ACCEPTED)
-async def deleteUser(
-    # request: Request,
+@router.delete(
+    "/me",
+    response_model=MessageResp,
+    status_code=status.HTTP_202_ACCEPTED,
+    operation_id="archiveCurrentUser",
+)
+async def archiveCurrentUser(
     payload: DeleteUserReq,
     response: Response,
-    db: Annotated[AsyncSession, Depends(dbHandler)],
-    at: Annotated[AccessTokenPayload, Depends(accessHandler)],
-    sec: Annotated[SecurityHandler, Depends(secHandler)],
+    accessToken: Annotated[AccessTokenPayload, Depends(accessHandler)],
     nowUtc: Annotated[datetime, Depends(timeHandler)],
+    database: Annotated[DatabaseHandler, Depends(databaseHandler)],
+    session: Annotated[AsyncSession, Depends(dbSessionHandler)],
+    security: Annotated[SecurityHandler, Depends(securityHandler)],
+    userRepository: Annotated[
+        UserAccountRepository,
+        Depends(userAccountRepositoryHandler),
+    ],
+    historyRepository: Annotated[
+        UserAccountHistoryRepository,
+        Depends(userAccountHistoryRepositoryHandler),
+    ],
+    refreshTokenRepository: Annotated[
+        RefreshTokenRepository,
+        Depends(refreshTokenRepositoryHandler),
+    ],
 ):
+    async with database.transaction(session):
+        user = await userRepository.getUserById(accessToken.sub)
 
-    query = select(UserAccount).where(UserAccount.id == at.sub)
-
-    async with handleDbOp(session=db):
-        result = await db.execute(query)
-        user = result.scalar_one_or_none()
-
-    if not (user and user.accountStatus == UserAccountStatus.ACTIVE):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User account is disabled or does not exist anymore.",
-        )
-
-    passwdMatch = sec.verifyPassword(hash=user.password, plain=payload.password)
-
-    if not passwdMatch:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unable to delete this user! Provide the right password.",
-        )
-
-    historyLog = UserAccountHistory(
-        userAccountId=user.id,
-        statusChangedTo=UserAccountStatus.ARCHIVED,
-        changedBy=user.id,
-        reason="User self-initiated automated account closure sequence.",
-    )
-
-    async with handleDbOp(session=db):
-        user.accountStatus = UserAccountStatus.ARCHIVED
-
-        db.add(historyLog)
-
-        await db.execute(
-            update(RefreshToken)
-            .where(
-                RefreshToken.userAccountId == user.id,
-                RefreshToken.isActive == True,
+        if not (user and user.accountStatus == UserAccountStatus.ACTIVE):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User account is disabled or does not exist anymore.",
             )
-            .values(isActive=False, rotatedAt=nowUtc)
+
+        passwordMatch = security.verifyPassword(
+            hashedPassword=user.password,
+            plainPassword=payload.password,
         )
 
-        await db.commit()
+        if not passwordMatch:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Unable to delete this user. Provide the correct password.",
+            )
 
-    sec.revokeRefreshToken(response)
+        await userRepository.updateUserStatus(
+            accountStatus=UserAccountStatus.ARCHIVED,
+            user=user,
+            updatedAt=nowUtc,
+        )
 
-    return {
-        "msg": "Your account profile has been successfully deactivated and archived."
-    }
+        await historyRepository.createHistoryEntry(
+            userAccountId=user.id,
+            statusChangedTo=UserAccountStatus.ARCHIVED,
+            changedBy=user.id,
+            reason="User self-initiated account closure.",
+            changedAt=nowUtc,
+        )
+
+        await refreshTokenRepository.revokeUserSessions(
+            userAccountId=user.id,
+            rotatedAt=nowUtc,
+        )
+
+    security.revokeRefreshToken(response)
+
+    return {"msg": "Your account profile has been successfully archived."}
+
+
+@router.patch(
+    "/me/password",
+    response_model=MessageResp,
+    status_code=status.HTTP_202_ACCEPTED,
+    operation_id="resetCurrentUserPassword",
+)
+async def resetCurrentUserPassword(
+    payload: ResetPasswdReq,
+    response: Response,
+    accessToken: Annotated[AccessTokenPayload, Depends(accessHandler)],
+    nowUtc: Annotated[datetime, Depends(timeHandler)],
+    database: Annotated[DatabaseHandler, Depends(databaseHandler)],
+    session: Annotated[AsyncSession, Depends(dbSessionHandler)],
+    security: Annotated[SecurityHandler, Depends(securityHandler)],
+    userRepository: Annotated[
+        UserAccountRepository,
+        Depends(userAccountRepositoryHandler),
+    ],
+    refreshTokenRepository: Annotated[
+        RefreshTokenRepository,
+        Depends(refreshTokenRepositoryHandler),
+    ],
+):
+    async with database.transaction(session):
+        user = await userRepository.getUserById(accessToken.sub)
+
+        if not (user and user.accountStatus == UserAccountStatus.ACTIVE):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="User account is disabled or does not exist anymore.",
+            )
+
+        passwordMatch = security.verifyPassword(
+            hashedPassword=user.password,
+            plainPassword=payload.oldPasswd,
+        )
+
+        if not passwordMatch:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Unable to update the password with a new one.",
+            )
+
+        await userRepository.updateUserPassword(
+            user=user,
+            hashedPassword=security.hashPassword(payload.newPasswd),
+            updatedAt=nowUtc,
+        )
+
+        await refreshTokenRepository.revokeUserSessions(
+            userAccountId=user.id,
+            rotatedAt=nowUtc,
+        )
+
+    security.revokeRefreshToken(response)
+
+    return {"msg": "The password was successfully updated. Please sign in again."}
 
 
 @router.get(
-    "/sessions",
+    "/me/sessions",
     response_model=PaginatedRefreshTokenResp,
     status_code=status.HTTP_200_OK,
+    operation_id="listCurrentUserSessions",
 )
-async def getUserSessions(
-    db: Annotated[AsyncSession, Depends(dbHandler)],
-    at: Annotated[AccessTokenPayload, Depends(accessHandler)],
-    all: Annotated[bool, Query()] = False,
+async def listCurrentUserSessions(
+    accessToken: Annotated[AccessTokenPayload, Depends(accessHandler)],
+    refreshTokenRepository: Annotated[
+        RefreshTokenRepository,
+        Depends(refreshTokenRepositoryHandler),
+    ],
+    onlyActive: Annotated[bool, Query(alias="active")] = True,
+    allSessions: Annotated[bool, Query(alias="all")] = False,
     limit: Annotated[int, Query(ge=1, le=50)] = 10,
     offset: Annotated[int, Query(ge=0)] = 0,
 ):
-    countQuery = (
-        select(func.count())
-        .select_from(RefreshToken)
-        .where(RefreshToken.userAccountId == at.sub)
+    totalRecords, sessions = await refreshTokenRepository.listUserSessions(
+        userAccountId=accessToken.sub,
+        onlyActive=onlyActive,
+        allSessions=allSessions,
+        limit=limit,
+        offset=offset,
     )
-
-    query = select(RefreshToken).where(RefreshToken.userAccountId == at.sub)
-
-    if not all:
-        countQuery = countQuery.where(RefreshToken.isActive == True)
-        query = query.where(RefreshToken.isActive == True)
-
-    query = query.order_by(RefreshToken.createdAt.desc()).offset(offset).limit(limit)
-
-    async with handleDbOp(session=db):
-        totalCount = (await db.execute(countQuery)).scalar_one()
-        sessions = (await db.execute(query)).scalars().all()
 
     return PaginatedRefreshTokenResp.model_validate(
         {
             "metadata": {
-                "totalRecords": totalCount,
+                "totalRecords": totalRecords,
                 "limit": limit,
                 "offset": offset,
-                "hasMore": (offset + limit) < totalCount,
+                "hasMore": (offset + limit) < totalRecords,
             },
             "results": sessions,
         }
@@ -161,26 +238,25 @@ async def getUserSessions(
 
 
 @router.get(
-    "/sessions/{id}",
+    "/me/sessions/{sessionId}",
     response_model=RefreshTokenResp,
     status_code=status.HTTP_200_OK,
+    operation_id="getCurrentUserSession",
 )
-async def getUserSession(
-    # request: Request,
-    id: uuid.UUID,
-    db: Annotated[AsyncSession, Depends(dbHandler)],
-    at: Annotated[AccessTokenPayload, Depends(accessHandler)],
+async def getCurrentUserSession(
+    sessionId: uuid.UUID,
+    accessToken: Annotated[AccessTokenPayload, Depends(accessHandler)],
+    refreshTokenRepository: Annotated[
+        RefreshTokenRepository,
+        Depends(refreshTokenRepositoryHandler),
+    ],
 ):
-    query = select(RefreshToken).where(
-        RefreshToken.userAccountId == at.sub,
-        RefreshToken.id == id,
+    session = await refreshTokenRepository.getUserSessionById(
+        userAccountId=accessToken.sub,
+        sessionId=sessionId,
     )
 
-    async with handleDbOp(session=db):
-        result = await db.execute(query)
-        session = result.scalar_one_or_none()
-
-    if not session:
+    if session is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Requested session could not be found.",
@@ -189,148 +265,108 @@ async def getUserSession(
     return session
 
 
-@router.patch(
-    "/sessions/revoke",
+@router.delete(
+    "/me/sessions/{sessionId}",
+    response_model=MessageResp,
     status_code=status.HTTP_200_OK,
+    operation_id="revokeCurrentUserSession",
 )
-async def revokeSessions(
-    # request: Request,
-    response: Response,
-    db: Annotated[AsyncSession, Depends(dbHandler)],
-    at: Annotated[AccessTokenPayload, Depends(accessHandler)],
-    sec: Annotated[SecurityHandler, Depends(secHandler)],
+async def revokeCurrentUserSession(
+    sessionId: uuid.UUID,
+    accessToken: Annotated[AccessTokenPayload, Depends(accessHandler)],
     nowUtc: Annotated[datetime, Depends(timeHandler)],
-    sessionId: Annotated[Optional[uuid.UUID], Query()] = None,
+    database: Annotated[DatabaseHandler, Depends(databaseHandler)],
+    session: Annotated[AsyncSession, Depends(dbSessionHandler)],
+    refreshTokenRepository: Annotated[
+        RefreshTokenRepository,
+        Depends(refreshTokenRepositoryHandler),
+    ],
 ):
-    if sessionId:
-        query = update(RefreshToken).where(
-            RefreshToken.userAccountId == at.sub,
-            RefreshToken.id == sessionId,
+    async with database.transaction(session):
+        affectedRows = await refreshTokenRepository.revokeUserSessions(
+            userAccountId=accessToken.sub,
+            sessionId=sessionId,
+            rotatedAt=nowUtc,
         )
 
-    else:
-        query = update(RefreshToken).where(
-            RefreshToken.userAccountId == at.sub,
-            RefreshToken.isActive == True,
+    if affectedRows == 0:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Requested session could not be found.",
         )
 
-    query = query.values(
-        isActive=False,
-        rotatedAt=nowUtc,
-    )
+    return {"msg": "Session successfully revoked."}
 
-    async with handleDbOp(session=db):
-        await db.execute(query)
-        await db.commit()
 
-    if not sessionId:
-        sec.revokeRefreshToken(response)
+@router.delete(
+    "/me/sessions",
+    response_model=MessageResp,
+    status_code=status.HTTP_200_OK,
+    operation_id="revokeAllCurrentUserSessions",
+)
+async def revokeAllCurrentUserSessions(
+    response: Response,
+    accessToken: Annotated[AccessTokenPayload, Depends(accessHandler)],
+    nowUtc: Annotated[datetime, Depends(timeHandler)],
+    database: Annotated[DatabaseHandler, Depends(databaseHandler)],
+    session: Annotated[AsyncSession, Depends(dbSessionHandler)],
+    security: Annotated[SecurityHandler, Depends(securityHandler)],
+    refreshTokenRepository: Annotated[
+        RefreshTokenRepository,
+        Depends(refreshTokenRepositoryHandler),
+    ],
+):
+    async with database.transaction(session):
+        await refreshTokenRepository.revokeAllActiveUserSessions(
+            userAccountId=accessToken.sub,
+            rotatedAt=nowUtc,
+        )
 
-    if sessionId:
-        return {"msg": "Session successufully revoked."}
+    security.revokeRefreshToken(response)
 
     return {"msg": "All active sessions successfully terminated."}
-
-
-@router.patch("/me/reset-passwd", status_code=status.HTTP_202_ACCEPTED)
-async def resetPassword(
-    # request: Request,
-    payload: ResetPasswdReq,
-    response: Response,
-    db: Annotated[AsyncSession, Depends(dbHandler)],
-    at: Annotated[AccessTokenPayload, Depends(accessHandler)],
-    sec: Annotated[SecurityHandler, Depends(secHandler)],
-    nowUtc: Annotated[datetime, Depends(timeHandler)],
-):
-    query = select(UserAccount).where(UserAccount.id == at.sub)
-
-    async with handleDbOp(session=db):
-        result = await db.execute(query)
-        user = result.scalar_one_or_none()
-
-    if not (user and user.accountStatus == UserAccountStatus.ACTIVE):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User account is disabled or does not exist anymore.",
-        )
-
-    passwdMatch = sec.verifyPassword(
-        hash=user.password,
-        plain=payload.oldPasswd,
-    )
-
-    if not passwdMatch:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Unable to update the password with a new one.",
-        )
-
-    query = (
-        update(RefreshToken)
-        .where(
-            RefreshToken.userAccountId == at.sub,
-            RefreshToken.isActive == True,
-        )
-        .values(isActive=False, rotatedAt=nowUtc)
-    )
-    async with handleDbOp(session=db):
-        user.password = sec.hashPassword(payload.newPasswd)
-
-        await db.execute(query)
-        await db.commit()
-
-    sec.revokeRefreshToken(response)
-
-    return {"msg": "The user password was successfully upgraded. Please sign in."}
 
 
 @router.get(
     "/me/login-attempts",
     response_model=PaginatedLoginAttemptResp,
     status_code=status.HTTP_200_OK,
+    operation_id="listCurrentUserLoginAttempts",
 )
-async def getUserLoginAttempts(
-    db: Annotated[AsyncSession, Depends(dbHandler)],
-    at: Annotated[AccessTokenPayload, Depends(accessHandler)],
+async def listCurrentUserLoginAttempts(
+    accessToken: Annotated[AccessTokenPayload, Depends(accessHandler)],
+    userRepository: Annotated[
+        UserAccountRepository,
+        Depends(userAccountRepositoryHandler),
+    ],
+    loginAttemptRepository: Annotated[
+        LoginAttemptRepository,
+        Depends(loginAttemptRepositoryHandler),
+    ],
     limit: Annotated[int, Query(ge=1, le=50)] = 10,
     offset: Annotated[int, Query(ge=0)] = 0,
 ):
+    email = await userRepository.getUserEmailById(accessToken.sub)
 
-    emailQuery = select(UserAccount.email).where(UserAccount.id == at.sub)
-    async with handleDbOp(session=db):
-        emailResult = await db.execute(emailQuery)
-        email = emailResult.scalar_one_or_none()
-
-    if not email:
+    if email is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User email context not found!",
+            detail="User email context not found.",
         )
 
-    countQuery = (
-        select(func.count())
-        .select_from(LoginAttempt)
-        .where(LoginAttempt.usedEmail == email)
+    totalRecords, attempts = await loginAttemptRepository.listLoginAttemptsByEmail(
+        usedEmail=email,
+        limit=limit,
+        offset=offset,
     )
-    dataQuery = (
-        select(LoginAttempt)
-        .where(LoginAttempt.usedEmail == email)
-        .order_by(LoginAttempt.attemptedAt.desc())
-        .offset(offset)
-        .limit(limit)
-    )
-
-    async with handleDbOp(session=db):
-        totalCount = (await db.execute(countQuery)).scalar_one()
-        attempts = (await db.execute(dataQuery)).scalars().all()
 
     return PaginatedLoginAttemptResp.model_validate(
         {
             "metadata": {
-                "totalRecords": totalCount,
+                "totalRecords": totalRecords,
                 "limit": limit,
                 "offset": offset,
-                "hasMore": (offset + limit) < totalCount,
+                "hasMore": (offset + limit) < totalRecords,
             },
             "results": attempts,
         }

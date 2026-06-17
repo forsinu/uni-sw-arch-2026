@@ -1,0 +1,105 @@
+services:
+  auth-db:
+    image: postgres:15-alpine
+
+    environment:
+      POSTGRES_USER: ${DB_AUTH_USER}
+      POSTGRES_PASSWORD: ${DB_AUTH_PASSWD}
+      POSTGRES_DB: ${DB_AUTH_NAME}
+
+    volumes:
+      - auth-db-data:/var/lib/postgresql/data/
+
+    networks:
+      - auth-net
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${DB_AUTH_USER} -d ${DB_AUTH_NAME}",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+    restart: unless-stopped
+
+  auth-service:
+    build:
+      context: ${AUTH_SERVICE_DIR}
+      dockerfile: Dockerfile
+
+    container_name: ${AUTH_SERVICE_HOSTNAME}
+    hostname: ${AUTH_SERVICE_HOSTNAME}
+
+    env_file:
+      - ./Services/AuthService/.env
+
+    environment:
+      DB_HOST: auth-db
+      DB_PORT: 5432
+      DB_NAME: ${DB_AUTH_NAME}
+      DB_USER: ${DB_AUTH_USER}
+      DB_PASSWD: ${DB_AUTH_PASSWD}
+
+      LOG_LEVEL: ${AUTH_LOG_LEVEL}
+      APP_LOGGER_NAME: ${AUTH_APP_LOGGER_NAME}
+      LOGGER_HANDLER_NAME: ${AUTH_LOGGER_HANDLER_NAME}
+      DB_LOGGER_NAME: ${AUTH_DB_LOGGER_NAME}
+      ROUTING_LOGGER_NAME: ${AUTH_ROUTING_LOGGER_NAME}
+
+      ROUTING_LOG_REQUESTS: ${AUTH_ROUTING_LOG_REQUESTS}
+      ROUTING_LOG_RESPONSES: ${AUTH_ROUTING_LOG_RESPONSES}
+
+      JWT_ALGORITHM: ${JWT_ALGORITHM}
+      JWT_KEY_ID: ${JWT_KEY_ID}
+      PRIVATE_KEY_PATH: ${JWT_PRIVATE_KEY_CONTAINER_PATH}
+      PUBLIC_KEY_PATH: ${JWT_PUBLIC_KEY_CONTAINER_PATH}
+
+      API_PREFIX: ${AUTH_API_PREFIX}
+      API_VERSION: ${AUTH_API_VERSION}
+
+      RABBITMQ_SERVICE_PORT: ${RABBITMQ_SERVICE_PORT}
+      RABBITMQ_SERVICE_USER: ${RABBITMQ_SERVICE_USER}
+      RABBITMQ_SERVICE_PASSWORD: ${RABBITMQ_SERVICE_PASSWORD}
+      RABBITMQ_SERVICE_VHOST: ${RABBITMQ_SERVICE_VHOST}
+      RABBITMQ_SERVICE_HOST: ${RABBITMQ_SERVICE_HOST}
+
+
+    volumes:
+      - ${JWT_PRIVATE_KEY_HOST_PATH}:${JWT_PRIVATE_KEY_CONTAINER_PATH}:ro
+      - ${JWT_PUBLIC_KEY_HOST_PATH}:${JWT_PUBLIC_KEY_CONTAINER_PATH}:ro
+
+    depends_on:
+      - auth-db
+
+    networks:
+      - auth-net
+      - service-mesh-net
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=service-mesh-net"
+
+      - "traefik.http.routers.auth.rule=Host(`app.docker.localhost`) && PathPrefix(`/auth`)"
+      - "traefik.http.routers.auth.entrypoints=websecure"
+      - "traefik.http.routers.auth.tls=true"
+
+      - "traefik.http.services.auth.loadbalancer.server.port=8000"
+
+      - "traefik.http.middlewares.auth-strip.stripprefix.prefixes=/auth"
+      - "traefik.http.routers.auth.middlewares=auth-strip"
+
+    restart: unless-stopped
+
+volumes:
+  auth-db-data:
+
+networks:
+  auth-net:
+    driver: bridge
+
+  service-mesh-net:
+    external: true
+    name: service-mesh-net

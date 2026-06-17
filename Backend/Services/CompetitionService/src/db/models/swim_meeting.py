@@ -1,14 +1,24 @@
+from __future__ import annotations
+
 from datetime import date, datetime
 import enum
-from typing import Optional
 import uuid
-from sqlalchemy import Date, DateTime, Enum, ForeignKey, Integer, String, Uuid, func
+
+from sqlalchemy import (
+    CheckConstraint,
+    Date,
+    DateTime,
+    Enum,
+    Index,
+    Integer,
+    String,
+    UniqueConstraint,
+    Uuid,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.db.models.base import Base
-
-# FIXED: Imported enums from swim_event instead of copying and pasting them here
-from src.db.models.swim_event import SwimEvent
 
 
 class SwimMeetingStatus(str, enum.Enum):
@@ -20,16 +30,53 @@ class SwimMeetingStatus(str, enum.Enum):
     CANCELLED = "CANCELLED"
 
 
+class MeetingPoolLength(int, enum.Enum):
+    M25 = 25
+    M50 = 50
+
+
 class SwimMeeting(Base):
     __tablename__ = "swim_meetings"
 
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4
+    __table_args__ = (
+        CheckConstraint(
+            '"poolLength" IN (25, 50)',
+            name="ck_swim_meetings_pool_length",
+        ),
+        CheckConstraint(
+            '"entriesOpenAt" < "entriesCloseAt"',
+            name="ck_swim_meetings_entries_window",
+        ),
+        CheckConstraint(
+            '"startDate" <= "endDate"',
+            name="ck_swim_meetings_date_range",
+        ),
+        UniqueConstraint(
+            "name",
+            "startDate",
+            name="uq_swim_meetings_name_start_date",
+        ),
+        Index(
+            "ix_swim_meetings_status_start_date",
+            "status",
+            "startDate",
+        ),
+        Index(
+            "ix_swim_meetings_pool_start_date",
+            "swimmingPoolId",
+            "startDate",
+        ),
+        Index(
+            "ix_swim_meetings_organizer_start_date",
+            "organizerTeamId",
+            "startDate",
+        ),
     )
 
     name: Mapped[str] = mapped_column(
         String(length=255),
-        unique=True,
+        nullable=False,
+        index=True,
     )
 
     poolLength: Mapped[int] = mapped_column(
@@ -39,10 +86,14 @@ class SwimMeeting(Base):
     )
 
     status: Mapped[SwimMeetingStatus] = mapped_column(
-        Enum(SwimMeetingStatus, native_enum=False),
+        Enum(
+            SwimMeetingStatus,
+            native_enum=False,
+            values_callable=lambda enumClass: [item.value for item in enumClass],
+        ),
         nullable=False,
-        index=True,
         default=SwimMeetingStatus.UPCOMING,
+        index=True,
     )
 
     entriesOpenAt: Mapped[datetime] = mapped_column(
@@ -55,9 +106,30 @@ class SwimMeeting(Base):
         nullable=False,
     )
 
-    startAt: Mapped[date] = mapped_column(Date, nullable=False)
+    startDate: Mapped[date] = mapped_column(
+        Date,
+        nullable=False,
+        index=True,
+    )
 
-    endAt: Mapped[date] = mapped_column(Date, nullable=False)
+    endDate: Mapped[date] = mapped_column(
+        Date,
+        nullable=False,
+    )
+
+    # External reference to Federation Service team.
+    organizerTeamId: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        nullable=True,
+        index=True,
+    )
+
+    # External reference to Federation Service swimming pool.
+    swimmingPoolId: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        nullable=True,
+        index=True,
+    )
 
     createdAt: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
@@ -65,21 +137,16 @@ class SwimMeeting(Base):
         server_default=func.now(),
     )
 
-    # From Federation Service
-    organizedBy: Mapped[Optional[uuid.UUID]] = mapped_column(
-        Uuid(as_uuid=True), nullable=True
-    )
-
-    # From Federation Service
-    swimmingPoolId: Mapped[Optional[uuid.UUID]] = mapped_column(
-        Uuid(as_uuid=True),
+    updatedAt: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
         nullable=True,
-        index=True,
+        default=None,
+        onupdate=func.now(),
     )
 
     swimEvents: Mapped[list["SwimEvent"]] = relationship(
-        # default_factory=list,
         back_populates="meeting",
         cascade="all, delete-orphan",
-        order_by="SwimEvent.startAt.asc()",
+        passive_deletes=True,
+        order_by="SwimEvent.startAt",
     )

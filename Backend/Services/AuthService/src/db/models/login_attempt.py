@@ -24,7 +24,16 @@ class LoginAttempt(Base):
         Index(
             "ix_login_attempts_rate_limit",
             "usedEmail",
-            "wasSuccessfull",
+            "wasSuccessful",
+            "attemptedAt",
+        ),
+        Index(
+            "ix_login_attempts_email_attempted_at",
+            "usedEmail",
+            "attemptedAt",
+        ),
+        Index(
+            "ix_login_attempts_attempted_at",
             "attemptedAt",
         ),
     )
@@ -37,13 +46,13 @@ class LoginAttempt(Base):
 
     ipAddress: Mapped[Optional[str]] = mapped_column(
         String(length=45),
-        nullable=False,
+        nullable=True,
         default=None,
     )
 
     userAgent: Mapped[Optional[str]] = mapped_column(
-        String(length=512),
-        nullable=False,
+        String(length=1024),
+        nullable=True,
         default=None,
     )
 
@@ -51,10 +60,12 @@ class LoginAttempt(Base):
         DateTime(timezone=True),
         nullable=False,
         server_default=func.now(),
+        index=True,
     )
 
-    wasSuccessfull: Mapped[bool] = mapped_column(
+    wasSuccessful: Mapped[bool] = mapped_column(
         Boolean,
         nullable=False,
         default=False,
+        index=True,
     )

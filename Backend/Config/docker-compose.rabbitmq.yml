@@ -1,0 +1,47 @@
+services:
+  rabbitmq:
+    image: rabbitmq:4-management
+    container_name: rabbitmq
+    hostname: rabbitmq
+
+    volumes:
+        - rabbitmq-data:/var/lib/rabbitmq
+        - ./Config/rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+
+
+        # - type: bind
+        #   source: ./rabbitmq/enabled_plugins
+        #   target: /etc/rabbitmq/enabled_plugins
+        #   read_only: true
+
+  
+
+    networks:
+      - service-mesh-net
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=service-mesh-net"
+
+      # RabbitMQ Management UI
+      - "traefik.http.routers.rabbitmq.rule=Host(`rabbitmq.docker.localhost`)"
+      - "traefik.http.routers.rabbitmq.entrypoints=websecure"
+      - "traefik.http.routers.rabbitmq.tls=true"
+      - "traefik.http.services.rabbitmq.loadbalancer.server.port=15672"
+
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+    restart: unless-stopped
+
+volumes:
+  rabbitmq-data:
+
+networks:
+  service-mesh-net:
+    external: true
+    name: service-mesh-net

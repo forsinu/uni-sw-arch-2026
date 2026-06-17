@@ -1,0 +1,323 @@
+#!/usr/bin/env python3
+
+from __future__ import annotations
+
+import os
+import secrets
+import shlex
+import subprocess
+import sys
+import dotenv
+from pathlib import Path
+
+
+ROOT_DIR = Path(__file__).resolve().parent
+SETTINGS_FILE = ROOT_DIR / ".settings.env"
+
+
+def loadEnvFile(path: Path) -> dict[str, str]:
+    if not path.exists():
+        raise FileNotFoundError(f"Missing env file: {path}")
+
+    values = dotenv.dotenv_values(dotenv_path=path)
+
+    if not values:
+        raise Exception(f"Unable to read values for {path.name}")
+
+    return values
+
+
+def resolvePath(value: str) -> Path:
+    path = Path(value)
+    if path.is_absolute():
+        return path
+
+    return ROOT_DIR / path
+
+
+def run(command: list[str], *, env: dict[str, str] | None = None) -> None:
+    print("+", " ".join(shlex.quote(part) for part in command))
+    subprocess.run(command, cwd=ROOT_DIR, env=env, check=True)
+
+
+def commandOutput(command: list[str]) -> str:
+    result = subprocess.run(
+        command,
+        cwd=ROOT_DIR,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=True,
+    )
+
+    return result.stdout.strip()
+
+
+def dockerNetworkExists(network_name: str) -> bool:
+    result = subprocess.run(
+        ["docker", "network", "inspect", network_name],
+        cwd=ROOT_DIR,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    return result.returncode == 0
+
+
+class Deployment:
+    def __init__(self) -> None:
+        self.settings = loadEnvFile(SETTINGS_FILE)
+
+        self.envFile = resolvePath(self.settings["ENV_FILE"])
+        self.serviceEnv = loadEnvFile(self.envFile)
+
+        self.env = os.environ.copy()
+        self.env.update(self.serviceEnv)
+
+        self.traefikCompose = resolvePath(self.settings["TRAEFIK_COMPOSE"])
+        self.portainerCompose = resolvePath(self.settings["PORTAINER_COMPOSE"])
+        self.rabbitmqCompose = resolvePath(self.settings["RABBITMQ_COMPOSE"])
+        self.authCompose = resolvePath(self.settings["SERVICES_AUTH_COMPOSE"])
+        self.federationCompose = resolvePath(
+            self.settings["SERVICES_FEDERATION_COMPOSE"]
+        )
+        self.competitionCompose = resolvePath(
+            self.settings["SERVICES_COMPETITION_COMPOSE"]
+        )
+
+        self.certsDir = resolvePath(self.settings["CERTS_DIR"])
+        self.dynamicDir = resolvePath(self.settings["DYNAMIC_DIR"])
+        self.dockerNetwork = self.settings.get("DOCKER_NETWORK", "service-mesh-net")
+
+        self.jwtKeysDir = resolvePath(self.serviceEnv["JWT_KEYS_DIR"])
+        self.jwtPrivateKey = resolvePath(self.serviceEnv["JWT_PRIVATE_KEY_HOST_PATH"])
+        self.jwtPublicKey = resolvePath(self.serviceEnv["JWT_PUBLIC_KEY_HOST_PATH"])
+        self.internalServiceToken = resolvePath(
+            self.serviceEnv["HOST_SERVICE_TOKEN_PATH"]
+        )
+
+    def composeCmd(self, *args: str) -> list[str]:
+        return [
+            "docker",
+            "compose",
+            "--project-directory",
+            str(ROOT_DIR),
+            "--env-file",
+            str(self.envFile),
+            "-f",
+            str(self.traefikCompose),
+            "-f",
+            str(self.portainerCompose),
+            "-f",
+            str(self.rabbitmqCompose),
+            "-f",
+            str(self.authCompose),
+            "-f",
+            str(self.federationCompose),
+            "-f",
+            str(self.competitionCompose),
+            *args,
+        ]
+
+    def setupInternalServiceToken(self) -> None:
+        self.internalServiceToken.parent.mkdir(parents=True, exist_ok=True)
+
+        if self.internalServiceToken.exists():
+            print("Internal service token already exists.")
+            return
+
+        print("Generating internal service token...")
+
+        token = secrets.token_urlsafe(64)
+
+        self.internalServiceToken.write_text(
+            token + "\n",
+            encoding="utf-8",
+        )
+
+        self.internalServiceToken.chmod(0o400)
+
+        print(f"Internal service token generated at: {self.internalServiceToken}")
+
+    def setup(self) -> None:
+        self.certsDir.mkdir(parents=True, exist_ok=True)
+        self.dynamicDir.mkdir(parents=True, exist_ok=True)
+        self.jwtKeysDir.mkdir(parents=True, exist_ok=True)
+
+        localKey = self.certsDir / "local.key"
+        localCrt = self.certsDir / "local.crt"
+
+        if not localKey.exists() or not localCrt.exists():
+            print("Generating local Traefik TLS certificate...")
+
+            run(
+                [
+                    "openssl",
+                    "req",
+                    "-x509",
+                    "-nodes",
+                    "-days",
+                    "365",
+                    "-newkey",
+                    "rsa:2048",
+                    "-keyout",
+                    str(localKey),
+                    "-out",
+                    str(localCrt),
+                    "-subj",
+                    "/CN=*.docker.localhost",
+                    "-addext",
+                    "subjectAltName=DNS:*.docker.localhost,DNS:docker.localhost,DNS:localhost,IP:127.0.0.1",
+                ]
+            )
+        else:
+            print("Traefik TLS certificate already exists.")
+
+        tlsYaml = self.dynamicDir / "tls.yaml"
+        tlsYaml.write_text(
+            """# Generated by deploy.py
+tls:
+  certificates:
+    - certFile: /certs/local.crt
+      keyFile: /certs/local.key
+""",
+            encoding="utf-8",
+        )
+
+        if not self.jwtPrivateKey.exists() or not self.jwtPublicKey.exists():
+            jwtAlgorithm = self.serviceEnv.get("JWT_ALGORITHM", "RS256")
+            jwtKeySize = self.serviceEnv.get("JWT_KEY_SIZE", "4096")
+
+            print("Generating JWT RSA key pair...")
+            print(f"  algorithm: {jwtAlgorithm}")
+            print(f"  key size:  {jwtKeySize}")
+
+            run(
+                [
+                    "openssl",
+                    "genpkey",
+                    "-algorithm",
+                    "RSA",
+                    "-out",
+                    str(self.jwtPrivateKey),
+                    "-pkeyopt",
+                    f"rsa_keygen_bits:{jwtKeySize}",
+                ]
+            )
+
+            run(
+                [
+                    "openssl",
+                    "rsa",
+                    "-pubout",
+                    "-in",
+                    str(self.jwtPrivateKey),
+                    "-out",
+                    str(self.jwtPublicKey),
+                ]
+            )
+
+            self.jwtPrivateKey.chmod(0o400)
+            self.jwtPublicKey.chmod(0o444)
+        else:
+            print("JWT key pair already exists.")
+
+        self.setupInternalServiceToken()
+
+        if not dockerNetworkExists(self.dockerNetwork):
+            print(f"Creating shared Docker bridge network: {self.dockerNetwork}")
+            run(["docker", "network", "create", self.dockerNetwork])
+        else:
+            print(f"Docker network already exists: {self.dockerNetwork}")
+
+        print("Setup completed.")
+
+    def start(self) -> None:
+        self.setup()
+
+        run(
+            self.composeCmd("up", "-d", "--build"),
+            env=self.env,
+        )
+
+        print()
+        print("Deployment completed.")
+        print()
+        print("Local URLs:")
+        print("  Traefik dashboard: https://dashboard.docker.localhost/dashboard/")
+        print("  Whoami:            https://whoami.docker.localhost")
+        print("  Portainer:         https://portainer.docker.localhost")
+        print("  RabbitMQ:          https://rabbitmq.docker.localhost")
+        print("Services: ")
+        print("  Auth service:      https://app.docker.localhost/auth")
+        print("  Federation:        https://app.docker.localhost/federation")
+        print("  Competition:       https://app.docker.localhost/competition")
+        print("  Live results:      https://app.docker.localhost/live")
+        print()
+        print("If DNS does not resolve, add these lines to /etc/hosts:")
+        print("  127.0.0.1 dashboard.docker.localhost")
+        print("  127.0.0.1 whoami.docker.localhost")
+        print("  127.0.0.1 portainer.docker.localhost")
+        print("  127.0.0.1 app.docker.localhost")
+
+    def down(self) -> None:
+        run(
+            self.composeCmd("down"),
+            env=self.env,
+        )
+
+        print("Compose containers stopped and removed.")
+        print("Volumes were preserved.")
+
+    def remove(self) -> None:
+        run(
+            self.composeCmd("down", "-v", "--remove-orphans"),
+            env=self.env,
+        )
+
+        print("Compose containers and volumes removed.")
+
+    def usage(self) -> None:
+        print("Usage:")
+        print(
+            "  python deploy.py setup   Generate certs, tls.yaml, JWT keys, and Docker network"
+        )
+        print("  python deploy.py start   Run setup, then start all containers")
+        print("  python deploy.py down    Stop Compose containers. Preserve volumes")
+        print("  python deploy.py remove  Remove Compose containers and volumes")
+
+
+def main() -> int:
+    command = sys.argv[1] if len(sys.argv) > 1 else "start"
+
+    try:
+        deployment = Deployment()
+
+        if command == "setup":
+            deployment.setup()
+        elif command == "start":
+            deployment.start()
+        elif command == "down":
+            deployment.down()
+        elif command == "remove":
+            deployment.remove()
+        else:
+            deployment.usage()
+            return 1
+
+        return 0
+
+    except KeyError as exc:
+        print(f"ERROR: missing required variable: {exc}", file=sys.stderr)
+        return 1
+
+    except FileNotFoundError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
+
+    except subprocess.CalledProcessError as exc:
+        print(f"ERROR: command failed with exit code {exc.returncode}", file=sys.stderr)
+        return exc.returncode
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,18 +1,16 @@
+# src/api/v1/api.py
+
 from fastapi import APIRouter
 
-from src.api.v1.endpoints.event import router as eventRouter
-from src.api.v1.endpoints.meeting import router as meetingRouter
+from src.api.v1.endpoints.swim_event_entry import router as swimEventEntriesRouter
+from src.api.v1.endpoints.swim_event_result import router as swimEventResultsRouter
+from src.api.v1.endpoints.swim_event import router as swimEventsRouter
+from src.api.v1.endpoints.swim_meetings import router as swimMeetingsRouter
+
 
 api = APIRouter()
 
-api.include_router(
-    eventRouter,
-    prefix="/event",
-    tags=["Event Manager"],
-)
-
-api.include_router(
-    meetingRouter,
-    prefix="/meeting",
-    tags=["Meets Manager"],
-)
+api.include_router(swimMeetingsRouter)
+api.include_router(swimEventsRouter)
+api.include_router(swimEventEntriesRouter)
+api.include_router(swimEventResultsRouter)

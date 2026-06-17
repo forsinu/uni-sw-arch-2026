@@ -1,19 +1,29 @@
+# src/api/dependencies.py
+
+from collections.abc import AsyncGenerator
 from datetime import datetime, timezone
-from typing import Annotated, AsyncGenerator, Optional
+from logging import Logger
+from typing import Annotated
 
-from sqlalchemy import select, update
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from fastapi import Cookie, Depends, Response, status, Request, Header
+from fastapi import Cookie, Depends, Header, Request, Response, status
 from fastapi.exceptions import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.core.environment import EnvHandler
+from src.core.log import LoggerHandler
+from src.core.sec import SecurityHandler
+from src.schemas.common import ClientInfo
 
 from src.db.models.refresh_token import RefreshToken
 from src.db.models.user_account import UserAccountRole
 from src.db.session import DatabaseHandler
-from src.core.security import SecurityHandler, AccessTokenPayload
-from src.core.env import EnvHandler
-from src.core.util import handleDbOp, ClientInfo
+from src.db.repositories import (
+    LoginAttemptRepository,
+    RefreshTokenRepository,
+    UserAccountHistoryRepository,
+    UserAccountRepository,
+)
 
 
 tokenHandler = HTTPBearer()
@@ -23,38 +33,72 @@ def envHandler(request: Request) -> EnvHandler:
     return request.app.state.env
 
 
-def secHandler(request: Request) -> SecurityHandler:
-    return request.app.state.security
+def logHandler(request: Request) -> LoggerHandler:
+    return request.app.state.loggerHandler
 
 
-async def dbHandler(request: Request) -> AsyncGenerator[AsyncSession, None]:
-    database: DatabaseHandler = request.app.state.database
-    async for session in database.getDbSession():
+def loggerHandler(
+    loggerManager: Annotated[LoggerHandler, Depends(logHandler)],
+) -> Logger:
+    return loggerManager.app
+
+
+def securityHandler(request: Request) -> SecurityHandler:
+    return request.app.state.secHandler
+
+
+def databaseHandler(request: Request) -> DatabaseHandler:
+    return request.app.state.dbHandler
+
+
+async def dbSessionHandler(
+    database: Annotated[DatabaseHandler, Depends(databaseHandler)],
+) -> AsyncGenerator[AsyncSession, None]:
+    async with database.session() as session:
         yield session
 
 
-# Use Access Token to verify is the user can request something
-def accessHandler(
-    at: Annotated[HTTPAuthorizationCredentials, Depends(tokenHandler)],
-    sec: Annotated[SecurityHandler, Depends(secHandler)],
-) -> AccessTokenPayload:
+def userAccountRepositoryHandler(
+    session: Annotated[AsyncSession, Depends(dbSessionHandler)],
+) -> UserAccountRepository:
+    return UserAccountRepository(session)
 
+
+def userAccountHistoryRepositoryHandler(
+    session: Annotated[AsyncSession, Depends(dbSessionHandler)],
+) -> UserAccountHistoryRepository:
+    return UserAccountHistoryRepository(session)
+
+
+def refreshTokenRepositoryHandler(
+    session: Annotated[AsyncSession, Depends(dbSessionHandler)],
+) -> RefreshTokenRepository:
+    return RefreshTokenRepository(session)
+
+
+def loginAttemptRepositoryHandler(
+    session: Annotated[AsyncSession, Depends(dbSessionHandler)],
+) -> LoginAttemptRepository:
+    return LoginAttemptRepository(session)
+
+
+def accessHandler(
+    token: Annotated[HTTPAuthorizationCredentials, Depends(tokenHandler)],
+    security: Annotated[SecurityHandler, Depends(securityHandler)],
+):
     try:
-        payload = sec.verifyAccessToken(at.credentials)
-    except ValueError as e:
+        return security.verifyAccessToken(token.credentials)
+
+    except ValueError as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=f"Authentication failed: {str(e)}",
-        )
-
-    return payload
+            detail=f"Authentication failed: {str(exc)}",
+        ) from exc
 
 
-# Use Access Token to verify the role of the user!!
 def accessAdminHandler(
-    payload: Annotated[AccessTokenPayload, Depends(accessHandler)],
-) -> AccessTokenPayload:
-
+    payload: Annotated[object, Depends(accessHandler)],
+):
     if payload.role != UserAccountRole.ADMIN:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -64,87 +108,33 @@ def accessAdminHandler(
     return payload
 
 
-async def refreshHandler(
-    response: Response,
-    db: Annotated[AsyncSession, Depends(dbHandler)],
-    sec: Annotated[SecurityHandler, Depends(secHandler)],
-    rt: Annotated[Optional[str], Cookie()] = None,
-) -> RefreshToken:
-
-    nowUtc = datetime.now(timezone.utc)
-
-    # The Refresh Token is absent
-    if not rt:
+def refreshCookieHandler(
+    rt: Annotated[str | None, Cookie()] = None,
+) -> str:
+    if rt is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Refresh Token missing. Please login again.",
+            detail="Refresh token missing. Please sign in again.",
         )
 
-    async with handleDbOp(session=db, errorMsg="Internal Server Error."):
-        query = await db.execute(select(RefreshToken).where(RefreshToken.token == rt))
-        dbToken = query.scalar_one_or_none()
-
-    if not dbToken:
-        sec.revokeRefreshToken(response)
-
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid session. Please sign in again.",
-        )
-
-    if not dbToken.isActive:
-        sec.revokeRefreshToken(response)
-
-        async with handleDbOp(session=db, errorMsg="Internal Server Error."):
-            await db.execute(
-                update(RefreshToken)
-                .where(
-                    RefreshToken.userAccountId == dbToken.userAccountId,
-                    RefreshToken.isActive == True,
-                )
-                .values(isActive=False, rotatedAt=nowUtc)
-            )
-
-            await db.commit()
-
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid session. Please sign in again.",
-        )
-
-    if dbToken.expiresAt.tzinfo is None:
-        dbToken.expiresAt = dbToken.expiresAt.replace(tzinfo=timezone.utc)
-
-    if nowUtc >= dbToken.expiresAt:
-        sec.revokeRefreshToken(response)
-
-        dbToken.isActive = False
-        dbToken.rotatedAt = nowUtc
-
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid session. Please sign in again.",
-        )
-
-    return dbToken
+    return rt
 
 
 def clientInfoHandler(
-    req: Request,
-    user_agent: Annotated[Optional[str], Header()] = None,
-    x_forwarded_for: Annotated[Optional[str], Header()] = None,
+    request: Request,
+    userAgent: Annotated[str | None, Header(alias="User-Agent")] = None,
+    xForwardedFor: Annotated[str | None, Header(alias="X-Forwarded-For")] = None,
 ) -> ClientInfo:
     clientIp = None
-    if x_forwarded_for:
-        clientIp = x_forwarded_for.split(",")[0].strip()
 
-    elif req.client:
-        clientIp = req.client.host
+    if xForwardedFor:
+        clientIp = xForwardedFor.split(",")[0].strip()
 
-    userAgent = user_agent or None
+    elif request.client:
+        clientIp = request.client.host
 
     return ClientInfo(ip=clientIp, ua=userAgent)
 
 
-def timeHandler():
+def timeHandler() -> datetime:
     return datetime.now(timezone.utc)
