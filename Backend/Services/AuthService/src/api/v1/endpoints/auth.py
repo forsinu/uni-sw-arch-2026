@@ -1,5 +1,3 @@
-# src/api/v1/auth.py
-
 from datetime import datetime
 from typing import Annotated
 
@@ -21,7 +19,6 @@ from src.api.dependencies import (
 )
 from src.core.sec import SecurityHandler
 from src.db.errors import DbConflictError
-from src.db.models.refresh_token import RefreshToken
 from src.db.models.user_account import UserAccountStatus
 from src.db.repositories import (
     LoginAttemptRepository,
@@ -30,7 +27,7 @@ from src.db.repositories import (
     UserAccountRepository,
 )
 from src.db.session import DatabaseHandler
-from src.schemas.auth import AccessTokenResp, RegisterOrLoginReq
+from src.schemas.auth import AccessTokenResp, LoginReq, RegisterReq
 from src.schemas.common import ClientInfo, MessageResp
 
 
@@ -50,7 +47,7 @@ DUMMY_ARGON2_HASH = "$argon2id$v=19$m=65536,t=3,p=4$dHVtbXlkdW1teWR1bW15$dummyha
     operation_id="registerUser",
 )
 async def registerUser(
-    credentials: RegisterOrLoginReq,
+    credentials: RegisterReq,
     database: Annotated[DatabaseHandler, Depends(databaseHandler)],
     session: Annotated[AsyncSession, Depends(dbSessionHandler)],
     security: Annotated[SecurityHandler, Depends(securityHandler)],
@@ -66,6 +63,7 @@ async def registerUser(
     try:
         async with database.transaction(session):
             user = await userRepository.createUser(
+                username=credentials.username,
                 email=credentials.email,
                 hashedPassword=security.hashPassword(credentials.password),
                 accountStatus=UserAccountStatus.ACTIVE,
@@ -81,7 +79,7 @@ async def registerUser(
     except DbConflictError as exc:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail="This email address is already registered to an account.",
+            detail="This username or email address is already registered to an account.",
         ) from exc
 
     return {"msg": "The user was registered successfully."}
@@ -95,7 +93,7 @@ async def registerUser(
 )
 async def loginUser(
     response: Response,
-    credentials: RegisterOrLoginReq,
+    credentials: LoginReq,
     clientInfo: Annotated[ClientInfo, Depends(clientInfoHandler)],
     nowUtc: Annotated[datetime, Depends(timeHandler)],
     database: Annotated[DatabaseHandler, Depends(databaseHandler)],
@@ -119,7 +117,9 @@ async def loginUser(
     refreshTokenValue = None
 
     async with database.transaction(session):
-        user = await userRepository.getUserByEmail(credentials.email)
+        user = await userRepository.getUserByUsernameOrEmail(
+            credentials.usernameOrEmail
+        )
 
         if not (user and user.accountStatus == UserAccountStatus.ACTIVE):
             loginFailed = True
@@ -141,7 +141,7 @@ async def loginUser(
 
         if loginFailed:
             await loginAttemptRepository.createLoginAttempt(
-                usedEmail=credentials.email,
+                usedEmailOrUsername=credentials.usernameOrEmail,
                 ipAddress=clientInfo.ip,
                 userAgent=clientInfo.ua,
                 wasSuccessful=False,
@@ -149,7 +149,7 @@ async def loginUser(
 
         else:
             await loginAttemptRepository.createLoginAttempt(
-                usedEmail=credentials.email,
+                usedEmailOrUsername=credentials.usernameOrEmail,
                 ipAddress=clientInfo.ip,
                 userAgent=clientInfo.ua,
                 wasSuccessful=True,
@@ -162,7 +162,7 @@ async def loginUser(
             )
 
             refreshPayload: RefreshTokenPayload = security.generateRefreshToken(
-                nowUtc=nowUtc
+                nowUtc=nowUtc,
             )
 
             await refreshTokenRepository.createRefreshToken(
@@ -185,7 +185,7 @@ async def loginUser(
     if loginFailed:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Incorrect email or password.",
+            detail="Incorrect username or password.",
         )
 
     security.setRefreshToken(
@@ -229,7 +229,7 @@ async def refreshAccessToken(
 
     async with database.transaction(session):
         dbRefreshToken = await refreshTokenRepository.getRefreshTokenByToken(
-            refreshTokenValueFromCookie
+            refreshTokenValueFromCookie,
         )
 
         if dbRefreshToken is None:
@@ -280,7 +280,9 @@ async def refreshAccessToken(
                         rotatedAt=nowUtc,
                     )
 
-                    newRefreshPayload = security.generateRefreshToken(nowUtc=nowUtc)
+                    newRefreshPayload = security.generateRefreshToken(
+                        nowUtc=nowUtc,
+                    )
 
                     await refreshTokenRepository.createRefreshToken(
                         token=newRefreshPayload.token,

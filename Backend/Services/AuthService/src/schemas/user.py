@@ -30,7 +30,8 @@ class ResetPasswdReq(BaseSchema):
 
 class UserAccountResp(BaseSchema):
     id: uuid.UUID
-    email: str
+    username: str
+    email: str | None = None
     userRole: UserAccountRole
     federationId: str | None = None
     accountStatus: UserAccountStatus
@@ -51,7 +52,7 @@ class RefreshTokenResp(BaseSchema):
 
 class LoginAttemptResp(BaseSchema):
     id: uuid.UUID
-    usedEmail: str
+    userEmailOrUsername: str
     ipAddress: str | None = None
     userAgent: str | None = None
     attemptedAt: datetime

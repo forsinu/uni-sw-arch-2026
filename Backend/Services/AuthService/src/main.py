@@ -58,17 +58,24 @@ def createApp() -> FastAPI:
         )
 
         security = SecurityHandler(env, logger)
-        rabbitMq = RabbitMQHandler(env.RABBITMQ_URL)
 
-        await security.initialize()
         await database.initialize()
-        await rabbitMq.initialize()
+        await security.initialize()
+
+        rabbitmq = RabbitMQHandler(
+            env=env,
+            sec=security,
+            sessionFactory=database._sessionFactory,
+            logger=logger,
+        )
+
+        await rabbitmq.initialize()
 
         app.state.envHandler = env
         app.state.loggerHandler = loggerHandler
         app.state.dbHandler = database
         app.state.secHandler = security
-        app.state.rabbitHandler = rabbitMq
+        app.state.rabbitmqHandler = rabbitmq
 
         includeAPIRouter(app)
 

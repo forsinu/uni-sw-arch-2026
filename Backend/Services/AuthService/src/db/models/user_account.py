@@ -10,6 +10,7 @@ from sqlalchemy.orm import (
 )
 
 from sqlalchemy import (
+    CheckConstraint,
     DateTime,
     Enum,
     ForeignKey,
@@ -38,6 +39,14 @@ class UserAccount(Base):
     __tablename__ = "user_accounts"
 
     __table_args__ = (
+        CheckConstraint(
+            "char_length(username) >= 3 AND char_length(username) <= 32",
+            name="ck_user_accounts_username_length",
+        ),
+        CheckConstraint(
+            "username ~ '^[a-zA-Z0-9_](?:[a-zA-Z0-9_.]*[a-zA-Z0-9_])?$'",
+            name="ck_user_accounts_username_format",
+        ),
         Index(
             "ix_user_accounts_status_created_at",
             "accountStatus",
@@ -54,11 +63,19 @@ class UserAccount(Base):
         ),
     )
 
-    email: Mapped[str] = mapped_column(
-        String(length=320),
+    username: Mapped[str] = mapped_column(
+        String(length=32),
         unique=True,
         nullable=False,
         index=True,
+    )
+
+    email: Mapped[str | None] = mapped_column(
+        String(length=320),
+        unique=True,
+        nullable=True,
+        index=True,
+        default=None,
     )
 
     password: Mapped[str] = mapped_column(
@@ -73,9 +90,8 @@ class UserAccount(Base):
     )
 
     federationId: Mapped[Optional[str]] = mapped_column(
-        String(length=32),
+        String(length=255),
         nullable=True,
-        unique=True,
         default=None,
         index=True,
     )

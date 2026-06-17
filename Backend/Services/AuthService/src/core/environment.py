@@ -1,7 +1,7 @@
 from typing import Literal
 from urllib.parse import quote
 
-from pydantic import AnyUrl, PostgresDsn, computed_field
+from pydantic import AmqpDsn, PostgresDsn, computed_field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -89,6 +89,9 @@ class EnvHandler(BaseSettings):
     RABBITMQ_SERVICE_VHOST: str = "/"
     RABBITMQ_SERVICE_HOST: str = "rabbitmq"
 
+    FEDERATION_EVENTS_EXCHANGE: str
+    AUTH_FEDERATION_QUEUE: str
+
     @computed_field
     @property
     def DB_URL(self) -> str:
@@ -106,15 +109,15 @@ class EnvHandler(BaseSettings):
     @computed_field
     @property
     def RABBITMQ_URL(self) -> str:
-        encodedVhost = quote(self.RABBITMQ_SERVICE_VHOST, safe="")
+        encoded_vhost = quote(self.RABBITMQ_SERVICE_VHOST, safe="")
 
-        url = AnyUrl.build(
+        url = AmqpDsn.build(
             scheme="amqp",
             username=self.RABBITMQ_SERVICE_USER,
             password=self.RABBITMQ_SERVICE_PASSWORD,
             host=self.RABBITMQ_SERVICE_HOST,
             port=self.RABBITMQ_SERVICE_PORT,
-            path=encodedVhost,
+            path=encoded_vhost,
         )
 
         return str(url)

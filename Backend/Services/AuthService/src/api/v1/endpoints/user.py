@@ -346,16 +346,24 @@ async def listCurrentUserLoginAttempts(
     limit: Annotated[int, Query(ge=1, le=50)] = 10,
     offset: Annotated[int, Query(ge=0)] = 0,
 ):
-    email = await userRepository.getUserEmailById(accessToken.sub)
+    userIdentity = await userRepository.getUserEmailAndUsernameById(
+        accessToken.sub,
+    )
 
-    if email is None:
+    if userIdentity is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="User email context not found.",
+            detail="User account not found.",
         )
 
-    totalRecords, attempts = await loginAttemptRepository.listLoginAttemptsByEmail(
-        usedEmail=email,
+    email, username = userIdentity
+
+    (
+        totalRecords,
+        attempts,
+    ) = await loginAttemptRepository.listLoginAttemptsByUserIdentity(
+        username=username,
+        email=email,
         limit=limit,
         offset=offset,
     )

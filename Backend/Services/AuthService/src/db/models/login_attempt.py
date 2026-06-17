@@ -23,13 +23,13 @@ class LoginAttempt(Base):
     __table_args__ = (
         Index(
             "ix_login_attempts_rate_limit",
-            "usedEmail",
+            "usedEmailOrUsername",
             "wasSuccessful",
             "attemptedAt",
         ),
         Index(
             "ix_login_attempts_email_attempted_at",
-            "usedEmail",
+            "usedEmailOrUsername",
             "attemptedAt",
         ),
         Index(
@@ -38,7 +38,7 @@ class LoginAttempt(Base):
         ),
     )
 
-    usedEmail: Mapped[str] = mapped_column(
+    usedEmailOrUsername: Mapped[str] = mapped_column(
         String(length=320),
         nullable=False,
         index=True,

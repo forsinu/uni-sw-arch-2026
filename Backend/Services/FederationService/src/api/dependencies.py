@@ -4,6 +4,7 @@ from logging import Logger
 from typing import Annotated
 import uuid
 
+
 from fastapi import Depends, Header, Request, status
 from fastapi.exceptions import HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -14,6 +15,7 @@ from src.core.log import LoggerHandler
 from src.core.sec import SecurityHandler
 from src.core.security.models import AccessTokenPayload, UserAccountRole
 from src.core.security.service_auth import ServiceTokenHandler
+from src.core.rabbitmq import RabbitMQHandler
 
 from src.db.models.federation_members import FederationRole
 from src.db.session import DatabaseHandler
@@ -40,6 +42,10 @@ def envHandler(request: Request) -> EnvHandler:
 
 def logHandler(request: Request) -> LoggerHandler:
     return request.app.state.loggerHandler
+
+
+def rabbitmqHandler(request: Request) -> RabbitMQHandler:
+    return request.app.state.rabbitmqHandler
 
 
 def loggerHandler(

@@ -105,6 +105,7 @@ async def createUserAdmin(
         async with database.transaction(session):
             user = await userRepository.createUser(
                 email=payload.email,
+                username=payload.username,
                 hashedPassword=security.hashPassword(generatedPassword),
                 federationId=payload.fedId,
                 userRole=UserAccountRole.DEFAULT,
@@ -369,12 +370,15 @@ async def listLoginAttemptsAdmin(
         LoginAttemptRepository,
         Depends(loginAttemptRepositoryHandler),
     ],
-    email: Annotated[str | None, Query(max_length=320)] = None,
+    cred: Annotated[str | None, Query(max_length=320)] = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
     offset: Annotated[int, Query(ge=0)] = 0,
 ):
-    totalRecords, attempts = await loginAttemptRepository.listLoginAttempts(
-        email=email,
+    (
+        totalRecords,
+        attempts,
+    ) = await loginAttemptRepository.listLoginAttemptsByEmailOrUsername(
+        usedEmailOrUsername=cred,
         limit=limit,
         offset=offset,
     )

@@ -12,13 +12,13 @@ class LoginAttemptRepository:
 
     async def createLoginAttempt(
         self,
-        usedEmail: str,
+        usedEmailOrUsername: str,
         ipAddress: str | None,
         userAgent: str | None,
         wasSuccessful: bool,
     ) -> LoginAttempt:
         loginAttempt = LoginAttempt(
-            usedEmail=usedEmail,
+            usedEmailOrUsername=usedEmailOrUsername,
             ipAddress=ipAddress,
             userAgent=userAgent,
             wasSuccessful=wasSuccessful,
@@ -33,7 +33,7 @@ class LoginAttemptRepository:
         self,
         limit: int,
         offset: int,
-        email: str | None = None,
+        emailOrUsername: str | None = None,
     ) -> tuple[int, Sequence[LoginAttempt]]:
         countQuery = select(func.count()).select_from(LoginAttempt)
 
@@ -44,30 +44,63 @@ class LoginAttemptRepository:
             .limit(limit)
         )
 
-        if email is not None:
-            countQuery = countQuery.where(LoginAttempt.usedEmail == email)
-
-            dataQuery = (
-                select(LoginAttempt)
-                .where(LoginAttempt.usedEmail == email)
-                .order_by(LoginAttempt.attemptedAt.desc())
-                .offset(offset)
-                .limit(limit)
+        if emailOrUsername is not None:
+            countQuery = countQuery.where(
+                LoginAttempt.usedEmailOrUsername == emailOrUsername
             )
 
-        totalRecords = (await self.session.execute(countQuery)).scalar_one()
-        loginAttempts = (await self.session.execute(dataQuery)).scalars().all()
+            dataQuery = dataQuery.where(
+                LoginAttempt.usedEmailOrUsername == emailOrUsername
+            )
 
-        return totalRecords, loginAttempts
+        totalRecords = await self.session.scalar(countQuery)
 
-    async def listLoginAttemptsByEmail(
+        result = await self.session.execute(dataQuery)
+        loginAttempts = result.scalars().all()
+
+        return totalRecords or 0, loginAttempts
+
+    async def listLoginAttemptsByEmailOrUsername(
         self,
-        usedEmail: str,
         limit: int,
         offset: int,
+        usedEmailOrUsername: str | None = None,
     ) -> tuple[int, Sequence[LoginAttempt]]:
         return await self.listLoginAttempts(
-            email=usedEmail,
+            emailOrUsername=usedEmailOrUsername,
             limit=limit,
             offset=offset,
         )
+
+    async def listLoginAttemptsByUserIdentity(
+        self,
+        username: str,
+        email: str | None,
+        limit: int,
+        offset: int,
+    ) -> tuple[int, Sequence[LoginAttempt]]:
+        identifiers = [username]
+
+        if email is not None:
+            identifiers.append(email)
+
+        countQuery = (
+            select(func.count())
+            .select_from(LoginAttempt)
+            .where(LoginAttempt.usedEmailOrUsername.in_(identifiers))
+        )
+
+        dataQuery = (
+            select(LoginAttempt)
+            .where(LoginAttempt.usedEmailOrUsername.in_(identifiers))
+            .order_by(LoginAttempt.attemptedAt.desc())
+            .offset(offset)
+            .limit(limit)
+        )
+
+        totalRecords = await self.session.scalar(countQuery)
+
+        result = await self.session.execute(dataQuery)
+        loginAttempts = result.scalars().all()
+
+        return totalRecords or 0, loginAttempts

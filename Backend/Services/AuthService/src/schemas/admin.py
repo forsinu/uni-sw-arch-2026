@@ -1,11 +1,10 @@
-# src/schema/admin.py
-
 from datetime import datetime
 import uuid
 
 from pydantic import Field
 
 from src.db.models.user_account import UserAccountStatus
+from src.schemas.auth import USERNAME_PATTERN
 from src.schemas.common import BaseSchema, PaginatedResp
 from src.schemas.user import (
     LoginAttemptResp,
@@ -15,7 +14,8 @@ from src.schemas.user import (
 
 
 class UserCreationAdminReq(BaseSchema):
-    email: str = Field(
+    email: str | None = Field(
+        default=None,
         min_length=3,
         max_length=320,
         examples=["new.user@example.com"],
@@ -23,8 +23,13 @@ class UserCreationAdminReq(BaseSchema):
 
     fedId: str | None = Field(
         default=None,
+    )
+
+    username: str = Field(
+        min_length=3,
         max_length=32,
-        examples=["RRR-123456789"],
+        pattern=USERNAME_PATTERN,
+        examples=["mario.rossi"],
     )
 
 

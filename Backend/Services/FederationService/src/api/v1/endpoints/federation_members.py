@@ -1,6 +1,7 @@
 from typing import Annotated
 import uuid
 
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -9,10 +10,12 @@ from src.api.dependencies import (
     dbManagerHandler,
     dbSessionHandler,
     federationMemberRepositoryHandler,
+    rabbitmqHandler,
     secHandler,
     swimmingTeamRepositoryHandler,
 )
 from src.core.sec import SecurityHandler
+from src.core.rabbitmq import RabbitMQHandler
 from src.db.errors import DbConflictError
 from src.db.models.federation_members import FederationRole
 from src.db.repositories.federation_member import FederationMemberRepository
@@ -25,6 +28,12 @@ from src.schemas.federation_member import (
     FederationMemberUpdateReq,
     PaginatedFederationMemberResp,
 )
+from src.core.messaging.event import (
+    FederationMemberCreatedData,
+    FederationMemberFederationChangedData,
+    FederationMemberRemovedData,
+)
+from src.core.security.models import AccessTokenPayload
 
 
 router = APIRouter(
@@ -80,10 +89,11 @@ async def listFederationMembers(
 )
 async def createFederationMember(
     payload: FederationMemberCreateReq,
-    _: Annotated[object, Depends(adminAccessHandler)],
+    token: Annotated[AccessTokenPayload, Depends(adminAccessHandler)],
     database: Annotated[DatabaseHandler, Depends(dbManagerHandler)],
     session: Annotated[AsyncSession, Depends(dbSessionHandler)],
     security: Annotated[SecurityHandler, Depends(secHandler)],
+    rabbitmq: Annotated[RabbitMQHandler, Depends(rabbitmqHandler)],
     memberRepository: Annotated[
         FederationMemberRepository,
         Depends(federationMemberRepositoryHandler),
@@ -130,6 +140,16 @@ async def createFederationMember(
                 detail="A federation member with the same identity already exists.",
             ) from exc
 
+    if member.federationId is not None:
+        await rabbitmq.publishFederationMemberCreated(
+            FederationMemberCreatedData(
+                firstName=member.firstName,
+                lastName=member.lastName,
+                federationId=member.federationId,
+                changedBy=token.sub,
+            )
+        )
+
     return member
 
 
@@ -167,9 +187,10 @@ async def getFederationMember(
 async def updateFederationMember(
     memberId: uuid.UUID,
     payload: FederationMemberUpdateReq,
-    _: Annotated[object, Depends(adminAccessHandler)],
+    token: Annotated[AccessTokenPayload, Depends(adminAccessHandler)],
     database: Annotated[DatabaseHandler, Depends(dbManagerHandler)],
     session: Annotated[AsyncSession, Depends(dbSessionHandler)],
+    rabbitmq: Annotated[RabbitMQHandler, Depends(rabbitmqHandler)],
     memberRepository: Annotated[
         FederationMemberRepository,
         Depends(federationMemberRepositoryHandler),
@@ -179,6 +200,9 @@ async def updateFederationMember(
         Depends(swimmingTeamRepositoryHandler),
     ],
 ):
+    oldFederationId: uuid.UUID | None = None
+    shouldPublishFederationChanged = False
+
     async with database.transaction(session):
         member = await memberRepository.getMemberById(memberId)
 
@@ -188,17 +212,31 @@ async def updateFederationMember(
                 detail="Federation member not found.",
             )
 
+        oldTeam = None
+        newTeam = None
+
+        if member.teamId is not None:
+            oldTeam = await teamRepository.getTeamById(
+                teamId=member.teamId,
+                active=True,
+            )
+
+        oldFederationId = member.federationId
+
         if payload.teamId is not None:
-            team = await teamRepository.getTeamById(
+            newTeam = await teamRepository.getTeamById(
                 teamId=payload.teamId,
                 active=True,
             )
 
-            if team is None:
+            if newTeam is None:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
                     detail="Target swimming team not found or inactive.",
                 )
+
+        else:
+            newTeam = oldTeam
 
         if (
             payload.firstName is not None
@@ -228,11 +266,22 @@ async def updateFederationMember(
                 teamId=newTeamId,
             )
 
+            shouldPublishFederationChanged = oldFederationId != member.federationId
+
         if payload.isActive is not None:
             await memberRepository.setMemberActiveStatus(
                 member=member,
                 isActive=payload.isActive,
             )
+
+    if shouldPublishFederationChanged:
+        await rabbitmq.publishFederationMemberFederationChanged(
+            FederationMemberFederationChangedData(
+                oldFederationId=oldFederationId,
+                newFederationId=member.federationId,
+                changedBy=token.sub,
+            )
+        )
 
     return member
 
@@ -245,9 +294,10 @@ async def updateFederationMember(
 )
 async def deactivateFederationMember(
     memberId: uuid.UUID,
-    _: Annotated[object, Depends(adminAccessHandler)],
+    token: Annotated[AccessTokenPayload, Depends(adminAccessHandler)],
     database: Annotated[DatabaseHandler, Depends(dbManagerHandler)],
     session: Annotated[AsyncSession, Depends(dbSessionHandler)],
+    rabbitmq: Annotated[RabbitMQHandler, Depends(rabbitmqHandler)],
     memberRepository: Annotated[
         FederationMemberRepository,
         Depends(federationMemberRepositoryHandler),
@@ -263,5 +313,12 @@ async def deactivateFederationMember(
             )
 
         await memberRepository.deactivateMember(member)
+
+    await rabbitmq.publishFederationMemberRemoved(
+        FederationMemberRemovedData(
+            federationId=member.federationId,
+            changedBy=token.sub,
+        )
+    )
 
     return {"msg": "Federation member deactivated successfully."}

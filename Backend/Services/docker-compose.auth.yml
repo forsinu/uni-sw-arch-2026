@@ -66,6 +66,9 @@ services:
       RABBITMQ_SERVICE_VHOST: ${RABBITMQ_SERVICE_VHOST}
       RABBITMQ_SERVICE_HOST: ${RABBITMQ_SERVICE_HOST}
 
+      FEDERATION_EVENTS_EXCHANGE: ${FEDERATION_EVENTS_EXCHANGE}
+      AUTH_FEDERATION_QUEUE: ${AUTH_FEDERATION_QUEUE}
+
 
     volumes:
       - ${JWT_PRIVATE_KEY_HOST_PATH}:${JWT_PRIVATE_KEY_CONTAINER_PATH}:ro
@@ -92,6 +95,18 @@ services:
       - "traefik.http.routers.auth.middlewares=auth-strip"
 
     restart: unless-stopped
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\"",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
 
 volumes:
   auth-db-data:

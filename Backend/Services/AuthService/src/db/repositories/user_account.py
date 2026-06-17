@@ -2,7 +2,7 @@ from collections.abc import Sequence
 from datetime import datetime
 import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.models.user_account import (
@@ -29,6 +29,21 @@ class UserAccountRepository:
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
+    async def setUserFedId(
+        self,
+        newFederationId: str,
+        oldFederationId: str | None = None,
+    ) -> UserAccount | None:
+        stmt = update(UserAccount)
+
+        if oldFederationId is not None:
+            stmt = stmt.where(UserAccount.federationId == oldFederationId)
+
+        stmt = stmt.values(federationId=newFederationId)
+        result = await self.session.execute(stmt)
+
+        return result.rowcount > 0
+
     async def getUserByEmail(
         self,
         email: str,
@@ -42,10 +57,49 @@ class UserAccountRepository:
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
-    async def getUserEmailById(self, userId: uuid.UUID) -> str | None:
-        query = select(UserAccount.email).where(UserAccount.id == userId)
+    async def getUserEmailAndUsernameById(
+        self,
+        userId: uuid.UUID,
+    ) -> tuple[str | None, str] | None:
+        query = select(
+            UserAccount.email,
+            UserAccount.username,
+        ).where(UserAccount.id == userId)
 
         result = await self.session.execute(query)
+        row = result.one_or_none()
+
+        if row is None:
+            return None
+
+        return row.email, row.username
+
+    async def getUserByUsername(
+        self,
+        username: str,
+        isActive: bool = False,
+    ):
+        query = select(UserAccount).where(UserAccount.username == username)
+
+        if isActive:
+            query = query.where(UserAccountStatus == UserAccountStatus.ACTIVE)
+
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none()
+
+    async def getUserByUsernameOrEmail(
+        self,
+        usernameOrEmail: str,
+    ) -> UserAccount | None:
+        stmt = select(UserAccount).where(
+            or_(
+                UserAccount.username == usernameOrEmail,
+                UserAccount.email == usernameOrEmail,
+            )
+        )
+
+        result = await self.session.execute(stmt)
+
         return result.scalar_one_or_none()
 
     async def listUsers(
@@ -94,15 +148,17 @@ class UserAccountRepository:
 
     async def createUser(
         self,
-        email: str,
+        username: str,
         hashedPassword: str,
         userRole: UserAccountRole = UserAccountRole.DEFAULT,
         accountStatus: UserAccountStatus = UserAccountStatus.ACTIVE,
         federationId: str | None = None,
         createdAt: datetime | None = None,
+        email: str | None = None,
     ) -> UserAccount:
         user = UserAccount(
             email=email,
+            username=username,
             password=hashedPassword,
             userRole=userRole,
             federationId=federationId,
@@ -141,6 +197,21 @@ class UserAccountRepository:
         updatedAt: datetime | None = None,
     ) -> UserAccount:
         user.accountStatus = accountStatus
+
+        if updatedAt is not None:
+            user.updatedAt = updatedAt
+
+        await self.session.flush()
+
+        return user
+
+    async def updateUserEmail(
+        self,
+        user: UserAccount,
+        email: str,
+        updatedAt: datetime | None = None,
+    ) -> UserAccount:
+        user.email = email
 
         if updatedAt is not None:
             user.updatedAt = updatedAt
