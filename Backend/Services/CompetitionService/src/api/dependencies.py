@@ -23,6 +23,7 @@ from src.db.repositories import (
     SwimEventRepository,
     SwimEventResultRepository,
     SwimMeetingRepository,
+    SwimMeetingRefereeRepository,
 )
 
 
@@ -97,6 +98,12 @@ def swimEventResultRepositoryHandler(
     session: AsyncSession = Depends(dbSessionHandler),
 ) -> SwimEventResultRepository:
     return SwimEventResultRepository(session)
+
+
+def swimMeetingRefereeRepositoryHandler(
+    session: AsyncSession = Depends(dbSessionHandler),
+) -> SwimMeetingRefereeRepository:
+    return SwimMeetingRefereeRepository(session)
 
 
 class AccessHandler:

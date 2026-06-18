@@ -1,5 +1,3 @@
-# src/schema/swim_meeting.py
-
 from datetime import date, datetime
 import uuid
 

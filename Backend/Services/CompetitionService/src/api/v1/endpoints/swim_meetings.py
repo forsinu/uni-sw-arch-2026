@@ -244,3 +244,37 @@ async def deleteSwimMeeting(
         await meetingRepository.deleteMeeting(meeting)
 
     return {"msg": "Swim meeting deleted successfully."}
+
+
+@router.patch(
+    "/{meetingId}/referee",
+    response_model=SwimMeetingResp,
+    status_code=status.HTTP_200_OK,
+    operation_id="updateSwimMeetingReferee",
+)
+async def addRefereeToMeeting(
+    meetingId: uuid.UUID,
+    payload: SwimMeetingStatusUpdateReq,
+    access: Annotated[AccessContext, Depends(adminAccessHandler)],
+    database: Annotated[DatabaseHandler, Depends(dbManagerHandler)],
+    session: Annotated[AsyncSession, Depends(dbSessionHandler)],
+    meetingRepository: Annotated[
+        SwimMeetingRepository,
+        Depends(swimMeetingRepositoryHandler),
+    ],
+):
+    async with database.transaction(session):
+        meeting = await meetingRepository.getMeetingById(meetingId)
+
+        if meeting is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Swim meeting not found.",
+            )
+
+        meeting = await meetingRepository.updateMeetingStatus(
+            meeting=meeting,
+            status=payload.status,
+        )
+
+    return meeting

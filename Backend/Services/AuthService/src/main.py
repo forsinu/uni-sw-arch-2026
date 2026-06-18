@@ -3,6 +3,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, status, Request
 from fastapi.responses import RedirectResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 from src.core.rabbitmq import RabbitMQHandler
 from src.core.sec import SecurityHandler
@@ -104,6 +105,14 @@ def createApp() -> FastAPI:
     @app.get("/.well-known/jwks.json", status_code=status.HTTP_200_OK)
     async def getJWKS(request: Request):
         return request.app.state.secHandler.generateJWKS()
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     return app
 

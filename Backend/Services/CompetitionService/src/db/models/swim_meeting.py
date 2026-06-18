@@ -150,3 +150,10 @@ class SwimMeeting(Base):
         passive_deletes=True,
         order_by="SwimEvent.startAt",
     )
+
+    referees: Mapped[list["SwimMeetingReferee"]] = relationship(
+        back_populates="meeting",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+        order_by="SwimMeetingReferee.createdAt",
+    )
