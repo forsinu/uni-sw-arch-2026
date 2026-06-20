@@ -1,0 +1,61 @@
+<section class="page">
+  @if (loading()) {
+    <div class="placeholder-panel"><p class="state-text">Loading event...</p></div>
+  } @else if (error()) {
+    <div class="placeholder-panel"><p class="state-text state-error">{{ error() }}</p></div>
+  } @else {
+    @if (event(); as swimEvent) {
+      <div class="page-header">
+        <h1 class="page-title">{{ swimEvent.distance }} {{ swimEvent.stroke }}</h1>
+        <p class="page-description">{{ swimEvent.gender }} · {{ swimEvent.startAt }}</p>
+      </div>
+
+      @if (actionMessage()) { <p class="action-message action-success">{{ actionMessage() }}</p> }
+      @if (actionError()) { <p class="action-message action-failure">{{ actionError() }}</p> }
+
+      <div class="split-grid">
+        <section class="placeholder-panel">
+          <h2>Entries</h2>
+          @if (entries().length === 0) { <p class="state-text">No entries yet.</p> }
+          @else {
+            <div class="compact-list">
+              @for (entry of entries(); track entry.id) {
+                <article><span>{{ entry.federationId }}</span><span>{{ entry.entryTimeMs }} ms</span></article>
+              }
+            </div>
+          }
+        </section>
+
+        <section class="placeholder-panel">
+          <h2>Results</h2>
+          @if (results().length === 0) { <p class="state-text">No results yet.</p> }
+          @else {
+            <div class="compact-list">
+              @for (result of results(); track result.id) {
+                <article><span>{{ result.federationId }} · {{ result.status }}</span><span>{{ result.finalTimeMs || 'No time' }}</span></article>
+              }
+            </div>
+          }
+        </section>
+      </div>
+
+      <div class="split-grid">
+        <form class="action-form placeholder-panel" [formGroup]="entryForm" (ngSubmit)="addEntry()">
+          <h2>Add entry</h2>
+          <label>Athlete federation ID<input formControlName="federationId" placeholder="ATH-team-..."></label>
+          <label>Entry time ms<input type="number" formControlName="entryTimeMs" min="1"></label>
+          <button class="primary-action" type="submit" [disabled]="saving()">Add entry</button>
+        </form>
+
+        <form class="action-form placeholder-panel" [formGroup]="resultForm" (ngSubmit)="saveResult()">
+          <h2>Save result</h2>
+          <label>Athlete federation ID<input formControlName="federationId" placeholder="ATH-team-..."></label>
+          <label>Status<select formControlName="status">@for (status of resultStatuses; track status) { <option [value]="status">{{ status }}</option> }</select></label>
+          <label>Final time ms<input type="number" formControlName="finalTimeMs" min="1"></label>
+          <label>Disqualification reason<input formControlName="disqualificationReason" placeholder="Optional"></label>
+          <button class="primary-action" type="submit" [disabled]="saving()">Save result</button>
+        </form>
+      </div>
+    }
+  }
+</section>

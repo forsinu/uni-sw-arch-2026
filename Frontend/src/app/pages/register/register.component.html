@@ -1,0 +1,93 @@
+<section class="auth-page">
+  <div class="auth-panel">
+    <p class="auth-kicker">New account</p>
+    <h1>Register</h1>
+    <p class="auth-copy">Create a profile to start using the swimming dashboard.</p>
+
+    <form class="auth-form" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+      <label for="username">
+        Username
+        <input
+          id="username"
+          type="text"
+          formControlName="username"
+          autocomplete="username"
+          maxlength="32"
+          placeholder="mario.rossi"
+          [class.is-invalid]="fieldInvalid('username')"
+        >
+      </label>
+
+      @if (fieldInvalid('username')) {
+        <p class="field-message">Use 3-32 letters, numbers, underscores, or inner dots.</p>
+      }
+
+      <label for="email">
+        Email
+        <input
+          id="email"
+          type="email"
+          formControlName="email"
+          autocomplete="email"
+          placeholder="user@example.com"
+          [class.is-invalid]="fieldInvalid('email')"
+        >
+      </label>
+
+      @if (fieldInvalid('email')) {
+        <p class="field-message">Enter a valid email address or leave it empty.</p>
+      }
+
+      <label for="password">
+        Password
+        <input
+          id="password"
+          type="password"
+          formControlName="password"
+          autocomplete="new-password"
+          placeholder="At least 8 characters"
+          [class.is-invalid]="fieldInvalid('password')"
+        >
+      </label>
+
+      @if (fieldInvalid('password')) {
+        <p class="field-message">Password must be 8-128 characters.</p>
+      }
+
+      <label for="confirmPassword">
+        Confirm password
+        <input
+          id="confirmPassword"
+          type="password"
+          formControlName="confirmPassword"
+          autocomplete="new-password"
+          placeholder="Repeat password"
+          [class.is-invalid]="fieldInvalid('confirmPassword') || passwordMismatch()"
+        >
+      </label>
+
+      @if (fieldInvalid('confirmPassword')) {
+        <p class="field-message">Confirm your password.</p>
+      } @else if (passwordMismatch()) {
+        <p class="field-message">Passwords do not match.</p>
+      }
+
+      @if (error()) {
+        <p class="form-message form-message-error">{{ error() }}</p>
+      }
+
+      @if (success()) {
+        <p class="form-message form-message-success">{{ success() }}</p>
+      }
+
+      <button class="primary-button" type="submit" [disabled]="loading()">
+        {{ loading() ? 'Creating account...' : 'Create account' }}
+      </button>
+    </form>
+
+    <p class="auth-switch">
+      Already have an account?
+      <a routerLink="/login">Login</a>
+    </p>
+  </div>
+</section>

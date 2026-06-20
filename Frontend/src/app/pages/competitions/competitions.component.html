@@ -1,0 +1,42 @@
+<section class="page">
+  <div class="page-header">
+    <h1 class="page-title">Competitions</h1>
+    <p class="page-description">Browse swim meetings available to your signed-in account.</p>
+  </div>
+
+  <div class="placeholder-panel">
+    <div class="toolbar">
+      <label for="competitionSearch">
+        Search competitions
+        <input id="competitionSearch" type="search" [formControl]="searchControl" placeholder="Search by name, status, date, or pool length">
+      </label>
+    </div>
+
+    @if (loading()) {
+      <p class="state-text">Loading competitions...</p>
+    } @else if (error()) {
+      <p class="state-text state-error">{{ error() }}</p>
+    } @else if (competitions().length === 0) {
+      <p class="state-text">No competitions found.</p>
+    } @else {
+      <div class="list-grid">
+        @for (competition of competitions(); track competition.id) {
+          <article class="list-card">
+            <div class="card-heading">
+              <div>
+                <h2>{{ competition.name }}</h2>
+                <p>{{ competition.startDate }} to {{ competition.endDate }}</p>
+              </div>
+              <span class="status-pill">{{ competition.status }}</span>
+            </div>
+            <dl>
+              <div><dt>Pool</dt><dd>{{ competition.poolLength }} m</dd></div>
+              <div><dt>Entries</dt><dd>{{ competition.entriesOpenAt }} to {{ competition.entriesCloseAt }}</dd></div>
+            </dl>
+            <a class="primary-action" [routerLink]="['/competitions', competition.id]">Open meeting</a>
+          </article>
+        }
+      </div>
+    }
+  </div>
+</section>

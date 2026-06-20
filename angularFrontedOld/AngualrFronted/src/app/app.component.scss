@@ -1,0 +1,18 @@
+:host {
+  display: block;
+  min-height: 100vh;
+}
+
+.app-main {
+  width: min(100% - 2rem, var(--content-width));
+  margin: 0 auto;
+  padding: 2rem 0 3rem;
+}
+
+.app-footer {
+  width: min(100% - 2rem, var(--content-width));
+  margin: 0 auto;
+  padding: 0 0 2rem;
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}

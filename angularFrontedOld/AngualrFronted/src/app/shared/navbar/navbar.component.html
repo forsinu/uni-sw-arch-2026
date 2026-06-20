@@ -1,0 +1,30 @@
+<header class="navbar-shell">
+  <nav class="navbar" aria-label="Primary navigation">
+    <a class="navbar-title" routerLink="/home">Swimming Dashboard</a>
+
+    <div class="navbar-links">
+      <a routerLink="/home" routerLinkActive="is-active">Home</a>
+      <a routerLink="/competitions" routerLinkActive="is-active">Competitions</a>
+      <a routerLink="/athletes" routerLinkActive="is-active">Athletes</a>
+    </div>
+
+    @if (auth.isAuthenticated()) {
+      <div class="navbar-actions">
+        <a class="button button-ghost" routerLink="/profile">Profile</a>
+        <button
+          class="button button-primary"
+          type="button"
+          (click)="logout()"
+          [disabled]="loggingOut()"
+        >
+          {{ loggingOut() ? 'Logging out...' : 'Logout' }}
+        </button>
+      </div>
+    } @else {
+      <div class="navbar-actions">
+        <a class="button button-ghost" routerLink="/login">Login</a>
+        <a class="button button-primary" routerLink="/register">Register</a>
+      </div>
+    }
+  </nav>
+</header>

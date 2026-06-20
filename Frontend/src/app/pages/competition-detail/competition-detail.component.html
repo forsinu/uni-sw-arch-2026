@@ -1,0 +1,51 @@
+<section class="page">
+  @if (loading()) {
+    <div class="placeholder-panel"><p class="state-text">Loading meeting...</p></div>
+  } @else if (error()) {
+    <div class="placeholder-panel"><p class="state-text state-error">{{ error() }}</p></div>
+  } @else {
+    @if (meeting(); as swimMeeting) {
+      <div class="page-header">
+        <h1 class="page-title">{{ swimMeeting.name }}</h1>
+        <p class="page-description">{{ swimMeeting.startDate }} to {{ swimMeeting.endDate }} · {{ swimMeeting.status }}</p>
+      </div>
+
+      @if (actionMessage()) { <p class="action-message action-success">{{ actionMessage() }}</p> }
+      @if (actionError()) { <p class="action-message action-failure">{{ actionError() }}</p> }
+
+      <div class="dashboard-grid">
+        <article class="dashboard-card"><h2>Pool length</h2><p>{{ swimMeeting.poolLength }} m</p></article>
+        <article class="dashboard-card"><h2>Entries</h2><p>{{ swimMeeting.entriesOpenAt }} to {{ swimMeeting.entriesCloseAt }}</p></article>
+        <article class="dashboard-card"><h2>Organizer team</h2><p>{{ swimMeeting.organizerTeamId || 'Not set' }}</p></article>
+      </div>
+
+      <section class="placeholder-panel">
+        <div class="card-heading"><h2>Events</h2></div>
+        @if (events().length === 0) {
+          <p class="state-text">No events created for this meeting.</p>
+        } @else {
+          <div class="compact-list">
+            @for (event of events(); track event.id) {
+              <article>
+                <span>{{ event.distance }} {{ event.stroke }} · {{ event.gender }}</span>
+                <span>{{ event.startAt }}</span>
+                <a class="secondary-action" [routerLink]="['/competitions', swimMeeting.id, 'events', event.id]">Open event</a>
+              </article>
+            }
+          </div>
+        }
+      </section>
+
+      @if (canManageEvents()) {
+        <form class="action-form placeholder-panel" [formGroup]="eventForm" (ngSubmit)="createEvent()">
+          <h2>Create event</h2>
+          <label>Distance<select formControlName="distance">@for (distance of distances; track distance) { <option [value]="distance">{{ distance }} m</option> }</select></label>
+          <label>Stroke<select formControlName="stroke">@for (stroke of strokes; track stroke) { <option [value]="stroke">{{ stroke }}</option> }</select></label>
+          <label>Gender<select formControlName="gender">@for (gender of genders; track gender) { <option [value]="gender">{{ gender }}</option> }</select></label>
+          <label>Start at<input type="datetime-local" formControlName="startAt"></label>
+          <button class="primary-action" type="submit" [disabled]="saving()">Create event</button>
+        </form>
+      }
+    }
+  }
+</section>

@@ -1,0 +1,55 @@
+<section class="page profile-page">
+  <div class="page-header">
+    <h1 class="page-title">Profile</h1>
+    <p class="page-description">Account, federation identity, and team details for the signed-in user.</p>
+  </div>
+
+  @if (loading()) {
+    <div class="placeholder-panel"><p class="state-text">Loading profile...</p></div>
+  } @else if (error()) {
+    <div class="placeholder-panel"><p class="state-text state-error">{{ error() }}</p></div>
+  } @else {
+    @if (account(); as user) {
+      <div class="profile-grid">
+        <article class="profile-card">
+          <div class="card-heading">
+            <h2>Account</h2>
+            <span class="status-pill">{{ roleLabel() }}</span>
+          </div>
+          <dl>
+            <div><dt>Username</dt><dd>{{ user.username }}</dd></div>
+            <div><dt>Email</dt><dd>{{ user.email || 'No email available' }}</dd></div>
+            <div><dt>Status</dt><dd>{{ user.accountStatus }}</dd></div>
+            <div><dt>Federation ID</dt><dd>{{ user.federationId || 'No federation ID linked' }}</dd></div>
+          </dl>
+        </article>
+
+        <article class="profile-card">
+          <div class="card-heading"><h2>Federation member</h2></div>
+          @if (member(); as federationMember) {
+            <dl>
+              <div><dt>Name</dt><dd>{{ federationMember.firstName }} {{ federationMember.lastName }}</dd></div>
+              <div><dt>Member code</dt><dd>{{ federationMember.memberCode }}</dd></div>
+              <div><dt>Role</dt><dd>{{ roleLabel() }}</dd></div>
+              <div><dt>Team ID</dt><dd>{{ federationMember.teamId || 'No team assigned' }}</dd></div>
+            </dl>
+          } @else {
+            <p class="state-text">No federation member record is visible for this account.</p>
+          }
+        </article>
+
+        <article class="profile-card">
+          <div class="card-heading"><h2>Team</h2></div>
+          @if (team(); as swimmingTeam) {
+            <dl>
+              <div><dt>Name</dt><dd>{{ swimmingTeam.name }}</dd></div>
+              <div><dt>Short name</dt><dd>{{ swimmingTeam.shortName || 'Not set' }}</dd></div>
+            </dl>
+          } @else {
+            <p class="state-text">No team details available.</p>
+          }
+        </article>
+      </div>
+    }
+  }
+</section>

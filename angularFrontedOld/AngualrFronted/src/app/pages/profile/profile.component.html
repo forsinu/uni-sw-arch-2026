@@ -1,0 +1,505 @@
+<section class="page profile-page">
+  <div class="page-header">
+    <h1 class="page-title">Profile</h1>
+    <p class="page-description">
+      Review account details, federation information, and role-specific dashboard data.
+    </p>
+  </div>
+
+  @if (loading()) {
+    <div class="placeholder-panel">
+      <p class="state-text">Loading profile...</p>
+    </div>
+  } @else if (error()) {
+    <div class="placeholder-panel">
+      <p class="state-text state-error">{{ error() }}</p>
+    </div>
+  } @else {
+    @if (actionMessage()) {
+      <p class="action-message action-success">{{ actionMessage() }}</p>
+    }
+
+    @if (actionError()) {
+      <p class="action-message action-failure">{{ actionError() }}</p>
+    }
+
+    @if (account(); as user) {
+      <div class="profile-grid">
+        <article class="profile-card">
+          <div class="card-heading">
+            <h2>Account information</h2>
+            <span class="status-pill">{{ profileRoleLabel() }}</span>
+          </div>
+          <dl>
+            <div>
+              <dt>Username</dt>
+              <dd>{{ user.username }}</dd>
+            </div>
+            <div>
+              <dt>Email</dt>
+              <dd>{{ user.email || 'No email available' }}</dd>
+            </div>
+            <div>
+              <dt>Status</dt>
+              <dd>{{ user.accountStatus }}</dd>
+            </div>
+            <div>
+              <dt>Federation ID</dt>
+              <dd>{{ user.federationId || 'No federation ID linked' }}</dd>
+            </div>
+          </dl>
+        </article>
+
+        @if (isAdmin()) {
+          <section class="profile-card profile-card-wide">
+            <div class="card-heading">
+              <h2>Admin dashboard</h2>
+            </div>
+
+            <div class="admin-shell">
+              <aside class="admin-menu" aria-label="Admin profile areas">
+                <button
+                  type="button"
+                  [class.is-active]="adminSection() === 'lists'"
+                  (click)="selectAdminSection('lists')"
+                >
+                  Lists
+                </button>
+                <button
+                  type="button"
+                  [class.is-active]="adminSection() === 'create'"
+                  (click)="selectAdminSection('create')"
+                >
+                  Create
+                </button>
+              </aside>
+
+              <div class="admin-content">
+                @if (adminSection() === 'lists') {
+                  <div class="management-grid">
+                    <article class="management-card">
+                      <div class="management-heading">
+                        <h3>Federation members</h3>
+                        <strong>{{ adminMembers().length }}</strong>
+                      </div>
+
+                      <div class="role-tabs" aria-label="Filter federation members by role">
+                        @for (role of memberRoleFilters; track role) {
+                          <button
+                            type="button"
+                            [class.is-active]="selectedMemberRole() === role"
+                            (click)="selectMemberRole(role)"
+                          >
+                            {{ memberRoleFilterLabel(role) }}
+                          </button>
+                        }
+                      </div>
+
+                      @if (adminMembersLoading()) {
+                        <p class="state-text">Loading federation members...</p>
+                      } @else if (adminMembersError()) {
+                        <p class="state-text state-error">{{ adminMembersError() }}</p>
+                      } @else if (adminMembers().length === 0) {
+                        <p class="state-text">No federation members found.</p>
+                      } @else {
+                        <div class="compact-list">
+                          @for (member of adminMembers(); track member.id) {
+                            <article>
+                              <span>{{ member.firstName }} {{ member.lastName }}</span>
+                              <span>{{ backendRoleLabel(member.fedRole) }} · {{ member.memberCode }}</span>
+                              <span>{{ member.teamId || 'No team' }}</span>
+                              <button class="danger-action" type="button" (click)="deactivateMember(member)" [disabled]="saving()">Deactivate</button>
+                            </article>
+                          }
+                        </div>
+                      }
+                    </article>
+
+                    <article class="management-card">
+                      <div class="management-heading">
+                        <h3>Teams</h3>
+                        <strong>{{ adminTeams().length }}</strong>
+                      </div>
+                      @if (adminTeams().length === 0) {
+                        <p class="state-text">No teams found.</p>
+                      } @else {
+                        <div class="compact-list">
+                          @for (team of adminTeams(); track team.id) {
+                            <article>
+                              <span>{{ team.name }}{{ team.shortName ? ' · ' + team.shortName : '' }}</span>
+                              <span>{{ team.id }}</span>
+                              <button class="danger-action" type="button" (click)="deactivateTeam(team)" [disabled]="saving()">Deactivate</button>
+                            </article>
+                          }
+                        </div>
+                      }
+                    </article>
+
+                    <article class="management-card">
+                      <div class="management-heading">
+                        <h3>Swimming pools</h3>
+                        <strong>{{ adminPools().length }}</strong>
+                      </div>
+                      @if (adminPools().length === 0) {
+                        <p class="state-text">No swimming pools found.</p>
+                      } @else {
+                        <div class="compact-list">
+                          @for (pool of adminPools(); track pool.id) {
+                            <article>
+                              <span>{{ pool.name }} · {{ pool.city }}</span>
+                              <span>{{ pool.poolLength }} m · {{ pool.laneCount }} lanes</span>
+                              <button class="danger-action" type="button" (click)="deactivatePool(pool)" [disabled]="saving()">Deactivate</button>
+                            </article>
+                          }
+                        </div>
+                      }
+                    </article>
+
+                    <article class="management-card">
+                      <div class="management-heading">
+                        <h3>Auth accounts</h3>
+                        <strong>{{ adminAccounts().length }}</strong>
+                      </div>
+                      @if (adminAccounts().length === 0) {
+                        <p class="state-text">No auth accounts found.</p>
+                      } @else {
+                        <div class="compact-list">
+                          @for (adminAccount of adminAccounts(); track adminAccount.id) {
+                            <article>
+                              <span>{{ adminAccount.username }} · {{ adminAccount.accountStatus }}</span>
+                              <span>{{ adminAccount.email || 'No email' }}</span>
+                              <div class="button-row">
+                                @for (status of accountStatuses; track status) {
+                                  <button
+                                    class="secondary-action"
+                                    type="button"
+                                    (click)="updateAccountStatus(adminAccount, status)"
+                                    [disabled]="saving() || adminAccount.accountStatus === status"
+                                  >
+                                    {{ status }}
+                                  </button>
+                                }
+                                <button class="danger-action" type="button" (click)="revokeAccountSessions(adminAccount)" [disabled]="saving()">Revoke sessions</button>
+                              </div>
+                            </article>
+                          }
+                        </div>
+                      }
+                    </article>
+
+                    <article class="management-card">
+                      <div class="management-heading">
+                        <h3>Meetings</h3>
+                        <strong>{{ adminMeetings().length }}</strong>
+                      </div>
+                      @if (adminMeetings().length === 0) {
+                        <p class="state-text">No meetings found.</p>
+                      } @else {
+                        <div class="compact-list">
+                          @for (meeting of adminMeetings(); track meeting.id) {
+                            <article>
+                              <span>{{ meeting.name }} · {{ meeting.status }}</span>
+                              <span>{{ meeting.startDate }} to {{ meeting.endDate }}</span>
+                              <button class="danger-action" type="button" (click)="deleteMeeting(meeting)" [disabled]="saving()">Delete</button>
+                            </article>
+                          }
+                        </div>
+                      }
+                    </article>
+                  </div>
+                } @else {
+                  <div class="creation-grid">
+                    <form class="action-form creation-card" [formGroup]="adminAccountForm" (ngSubmit)="createAccount()">
+                      <h3>Create auth account</h3>
+                      <label>
+                        Username
+                        <input formControlName="username" placeholder="mario.rossi">
+                      </label>
+                      <label>
+                        Email
+                        <input type="email" formControlName="email" placeholder="mario.rossi@example.com">
+                      </label>
+                      <label>
+                        Federation ID
+                        <input formControlName="fedId" placeholder="Optional">
+                      </label>
+                      <button class="primary-action" type="submit" [disabled]="saving()">Create account</button>
+                    </form>
+
+                    <form class="action-form creation-card" [formGroup]="adminMemberForm" (ngSubmit)="createFederationMember()">
+                      <h3>Create federation member</h3>
+                      <label>
+                        Role
+                        <select formControlName="fedRole">
+                          @for (role of memberCreateRoles; track role.value) {
+                            <option [value]="role.value">{{ role.label }}</option>
+                          }
+                        </select>
+                      </label>
+                      <label>
+                        Team
+                        <select formControlName="teamId">
+                          <option value="">No team / referee</option>
+                          @for (team of adminTeams(); track team.id) {
+                            <option [value]="team.id">{{ team.name }}{{ team.shortName ? ' · ' + team.shortName : '' }}</option>
+                          }
+                        </select>
+                      </label>
+                      <label>
+                        First name
+                        <input formControlName="firstName" placeholder="Mario">
+                      </label>
+                      <label>
+                        Last name
+                        <input formControlName="lastName" placeholder="Rossi">
+                      </label>
+                      <label>
+                        Birth
+                        <input type="date" formControlName="birth">
+                      </label>
+                      <label>
+                        Member code
+                        <input formControlName="memberCode" placeholder="Optional">
+                      </label>
+                      <button class="primary-action" type="submit" [disabled]="saving()">Create member</button>
+                    </form>
+
+                    <form class="action-form creation-card" [formGroup]="adminTeamForm" (ngSubmit)="createTeam()">
+                      <h3>Create team</h3>
+                      <label>
+                        Name
+                        <input formControlName="name" placeholder="Swimming Club">
+                      </label>
+                      <label>
+                        Short name
+                        <input formControlName="shortName" placeholder="SC">
+                      </label>
+                      <button class="primary-action" type="submit" [disabled]="saving()">Create team</button>
+                    </form>
+
+                    <form class="action-form creation-card" [formGroup]="adminPoolForm" (ngSubmit)="createPool()">
+                      <h3>Create swimming pool</h3>
+                      <label>
+                        Name
+                        <input formControlName="name" placeholder="Main Pool">
+                      </label>
+                      <label>
+                        Type
+                        <select formControlName="poolType">
+                          @for (type of poolTypes; track type) {
+                            <option [value]="type">{{ type }}</option>
+                          }
+                        </select>
+                      </label>
+                      <label>
+                        Length
+                        <select formControlName="poolLength">
+                          @for (length of poolLengths; track length) {
+                            <option [value]="length">{{ length }} m</option>
+                          }
+                        </select>
+                      </label>
+                      <label>
+                        Lanes
+                        <input type="number" formControlName="laneCount" min="1" max="20">
+                      </label>
+                      <label>
+                        Street address
+                        <input formControlName="streetAddress" placeholder="Via Roma 1">
+                      </label>
+                      <label>
+                        City
+                        <input formControlName="city" placeholder="Roma">
+                      </label>
+                      <label>
+                        Postal code
+                        <input formControlName="postalCode" placeholder="00100">
+                      </label>
+                      <label>
+                        Country ISO
+                        <input formControlName="countryIso" maxlength="2" placeholder="IT">
+                      </label>
+                      <label>
+                        Team
+                        <select formControlName="teamId">
+                          <option value="">No team</option>
+                          @for (team of adminTeams(); track team.id) {
+                            <option [value]="team.id">{{ team.name }}{{ team.shortName ? ' · ' + team.shortName : '' }}</option>
+                          }
+                        </select>
+                      </label>
+                      <button class="primary-action" type="submit" [disabled]="saving()">Create pool</button>
+                    </form>
+                  </div>
+                }
+              </div>
+            </div>
+          </section>
+        } @else {
+          <article class="profile-card">
+            <div class="card-heading">
+              <h2>Federation member</h2>
+            </div>
+            @if (federationMember(); as member) {
+              <dl>
+                <div>
+                  <dt>Name</dt>
+                  <dd>{{ member.firstName }} {{ member.lastName }}</dd>
+                </div>
+                <div>
+                  <dt>Role</dt>
+                  <dd>{{ backendRoleLabel(member.fedRole) }}</dd>
+                </div>
+                <div>
+                  <dt>Member code</dt>
+                  <dd>{{ member.memberCode }}</dd>
+                </div>
+                <div>
+                  <dt>Team</dt>
+                  <dd>{{ member.teamId || activeTeamId() || 'No team assigned' }}</dd>
+                </div>
+              </dl>
+            } @else {
+              <p class="state-text">No federation/member information available.</p>
+            }
+          </article>
+
+          <article class="profile-card">
+            <div class="card-heading">
+              <h2>Swimming team</h2>
+            </div>
+            @if (team(); as swimmingTeam) {
+              <dl>
+                <div>
+                  <dt>Name</dt>
+                  <dd>{{ swimmingTeam.name }}</dd>
+                </div>
+                <div>
+                  <dt>Short name</dt>
+                  <dd>{{ swimmingTeam.shortName || 'Not set' }}</dd>
+                </div>
+              </dl>
+            } @else {
+              <p class="state-text">No team information available.</p>
+            }
+          </article>
+
+          <article class="profile-card profile-card-wide">
+            <div class="card-heading">
+              <h2>Recent race results</h2>
+            </div>
+            @if (recentRaces().length === 0) {
+              <p class="state-text">No recent race results available.</p>
+            } @else {
+              <div class="compact-list">
+                @for (race of recentRaces(); track race.id) {
+                  <article>
+                    <span>{{ race.eventName }} · {{ race.meetingName }} · {{ race.result }}</span>
+                  </article>
+                }
+              </div>
+            }
+          </article>
+
+          @if (isTeamManager()) {
+            <article class="profile-card profile-card-wide">
+              <div class="card-heading">
+                <h2>Create meeting</h2>
+                <span class="status-pill">Team manager</span>
+              </div>
+              <form class="action-form action-form-wide" [formGroup]="managerMeetingForm" (ngSubmit)="createManagerMeeting()">
+                <label>
+                  Name
+                  <input formControlName="name" placeholder="Regional Spring Meeting">
+                </label>
+                <label>
+                  Pool length
+                  <select formControlName="poolLength">
+                    @for (length of poolLengths; track length) {
+                      <option [value]="length">{{ length }} m</option>
+                    }
+                  </select>
+                </label>
+                <label>
+                  Entries open
+                  <input type="datetime-local" formControlName="entriesOpenAt">
+                </label>
+                <label>
+                  Entries close
+                  <input type="datetime-local" formControlName="entriesCloseAt">
+                </label>
+                <label>
+                  Start date
+                  <input type="date" formControlName="startDate">
+                </label>
+                <label>
+                  End date
+                  <input type="date" formControlName="endDate">
+                </label>
+                <label>
+                  Swimming pool ID
+                  <input formControlName="swimmingPoolId" placeholder="Optional">
+                </label>
+                <button class="primary-action" type="submit" [disabled]="saving()">Create meeting</button>
+              </form>
+            </article>
+          }
+
+          @if (isCoach()) {
+            <article class="profile-card">
+              <div class="card-heading">
+                <h2>Team athletes</h2>
+              </div>
+              @if (coachTeamAthletes().length === 0) {
+                <p class="state-text">No athletes found for this team.</p>
+              } @else {
+                <div class="compact-list">
+                  @for (athlete of coachTeamAthletes(); track athlete.id) {
+                    <article>
+                      <span>{{ athlete.firstName }} {{ athlete.lastName }} · {{ athlete.memberCode }}</span>
+                    </article>
+                  }
+                </div>
+              }
+            </article>
+
+            <article class="profile-card">
+              <div class="card-heading">
+                <h2>Subscribe athlete</h2>
+              </div>
+              <form class="action-form" [formGroup]="coachEntryForm" (ngSubmit)="subscribeAthleteToEvent()">
+                <label>
+                  Meeting
+                  <select formControlName="meetingId">
+                    <option value="">Select meeting</option>
+                    @for (meeting of coachMeetings(); track meeting.id) {
+                      <option [value]="meeting.id">{{ meeting.name }} · {{ meeting.startDate }}</option>
+                    }
+                  </select>
+                </label>
+                <label>
+                  Event
+                  <select formControlName="eventId" [disabled]="coachEventsLoading() || coachEvents().length === 0">
+                    <option value="">{{ coachEventsLoading() ? 'Loading events...' : 'Select event' }}</option>
+                    @for (event of coachEvents(); track event.id) {
+                      <option [value]="event.id">{{ event.distance }} {{ event.stroke }} · {{ event.gender }}</option>
+                    }
+                  </select>
+                </label>
+                <label>
+                  Athlete federation ID
+                  <input formControlName="federationId" placeholder="ATH-team-...">
+                </label>
+                <label>
+                  Entry time milliseconds
+                  <input type="number" formControlName="entryTimeMs" min="1">
+                </label>
+                <button class="primary-action" type="submit" [disabled]="saving()">Subscribe athlete</button>
+              </form>
+            </article>
+          }
+        }
+      </div>
+    }
+  }
+</section>

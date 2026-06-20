@@ -1,0 +1,64 @@
+<header class="navbar-shell">
+  <nav class="navbar" aria-label="Primary navigation">
+    <a class="navbar-title" routerLink="/home">Swimming Dashboard</a>
+
+    <div class="navbar-links">
+      <a routerLink="/home" routerLinkActive="is-active">Home</a>
+
+      @if (auth.isAuthenticated()) {
+        <a [routerLink]="dashboardLink()" routerLinkActive="is-active">Dashboard</a>
+
+        @if (canSeeCompetitions()) {
+          <a routerLink="/competitions" routerLinkActive="is-active">Competitions</a>
+        }
+
+        @if (canSeeAthletes()) {
+          <a routerLink="/athletes" routerLinkActive="is-active">Athletes</a>
+        }
+
+        @if (canSeeTeams()) {
+          <a routerLink="/teams" routerLinkActive="is-active">Teams</a>
+        }
+
+        @if (canSeePools()) {
+          <a routerLink="/pools" routerLinkActive="is-active">Pools</a>
+        }
+
+        @if (isAdmin()) {
+          <a routerLink="/admin" routerLinkActive="is-active">Admin</a>
+        }
+
+        @if (isCoach()) {
+          <a routerLink="/coach" routerLinkActive="is-active">Coach</a>
+        }
+
+        @if (isManager()) {
+          <a routerLink="/manager" routerLinkActive="is-active">Manager</a>
+        }
+
+        @if (isReferee()) {
+          <a routerLink="/referee" routerLinkActive="is-active">Referee</a>
+        }
+      }
+    </div>
+
+    @if (auth.isAuthenticated()) {
+      <div class="navbar-actions">
+        <a class="button button-ghost" routerLink="/profile">Profile</a>
+        <button
+          class="button button-primary"
+          type="button"
+          (click)="logout()"
+          [disabled]="loggingOut()"
+        >
+          {{ loggingOut() ? 'Logging out...' : 'Logout' }}
+        </button>
+      </div>
+    } @else {
+      <div class="navbar-actions">
+        <a class="button button-ghost" routerLink="/login">Login</a>
+        <a class="button button-primary" routerLink="/register">Register</a>
+      </div>
+    }
+  </nav>
+</header>

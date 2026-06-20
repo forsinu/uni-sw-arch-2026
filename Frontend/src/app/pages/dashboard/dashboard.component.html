@@ -1,0 +1,54 @@
+<section class="page">
+  <div class="page-header">
+    <h1 class="page-title">Dashboard</h1>
+    <p class="page-description">Your role-aware starting point for meetings, teams, athletes, and account actions.</p>
+  </div>
+
+  @if (loading()) {
+    <div class="placeholder-panel"><p class="state-text">Loading dashboard...</p></div>
+  } @else {
+    @if (error()) {
+      <p class="action-message action-failure">{{ error() }}</p>
+    }
+
+    <div class="dashboard-grid">
+      <article class="dashboard-card">
+        <h2>Signed in as</h2>
+        <p>{{ account()?.username || 'Unknown user' }}</p>
+        <strong>{{ roleLabel() }}</strong>
+      </article>
+      <article class="dashboard-card">
+        <h2>Federation</h2>
+        <p>{{ account()?.federationId || auth.federationContext().federationId || 'No federation ID linked' }}</p>
+      </article>
+      <article class="dashboard-card">
+        <h2>Quick actions</h2>
+        <div class="button-row button-row-wrap">
+          <a class="secondary-action" routerLink="/competitions">Competitions</a>
+          <a class="secondary-action" routerLink="/athletes">Athletes</a>
+          <a class="secondary-action" routerLink="/profile">Profile</a>
+        </div>
+      </article>
+    </div>
+
+    <section class="placeholder-panel">
+      <div class="card-heading">
+        <h2>Upcoming meetings</h2>
+        <a class="secondary-action" routerLink="/competitions">View all</a>
+      </div>
+      @if (meetings().length === 0) {
+        <p class="state-text">No meetings available for this account.</p>
+      } @else {
+        <div class="compact-list">
+          @for (meeting of meetings(); track meeting.id) {
+            <article>
+              <span>{{ meeting.name }} · {{ meeting.status }}</span>
+              <span>{{ meeting.startDate }} to {{ meeting.endDate }}</span>
+              <a class="secondary-action" [routerLink]="['/competitions', meeting.id]">Open</a>
+            </article>
+          }
+        </div>
+      }
+    </section>
+  }
+</section>

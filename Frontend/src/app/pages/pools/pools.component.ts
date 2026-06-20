@@ -1,0 +1,18 @@
+import { Component, inject, signal } from '@angular/core';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { FederationApiService } from '../../Services/FederationService/api/federation-api.service';
+import { SwimmingPool, SwimmingTeam } from '../../Services/FederationService/api/federation-api.models';
+import { AuthService } from '../../core/auth/auth.service';
+
+@Component({ selector: 'app-pools', standalone: true, imports: [ReactiveFormsModule], templateUrl: './pools.component.html', styleUrls: ['./pools.component.scss'] })
+export class PoolsComponent {
+  private readonly api = inject(FederationApiService); private readonly fb = inject(FormBuilder); private readonly auth = inject(AuthService);
+  protected readonly pools = signal<SwimmingPool[]>([]); protected readonly teams = signal<SwimmingTeam[]>([]); protected readonly loading = signal(true); protected readonly saving = signal(false); protected readonly error = signal<string | null>(null); protected readonly actionMessage = signal<string | null>(null); protected readonly actionError = signal<string | null>(null);
+  protected readonly poolTypes = ['INDOOR', 'OUTDOOR'] as const; protected readonly poolLengths = [25, 50] as const;
+  protected readonly form = this.fb.nonNullable.group({ name: ['', [Validators.required]], poolType: ['INDOOR', [Validators.required]], poolLength: [25, [Validators.required]], laneCount: [8, [Validators.required, Validators.min(1)]], streetAddress: ['', [Validators.required]], city: ['', [Validators.required]], postalCode: ['', [Validators.required]], countryIso: ['IT', [Validators.required, Validators.minLength(2), Validators.maxLength(2)]], teamId: [''] });
+  constructor() { this.reload(); }
+  protected canManage(): boolean { const c = this.auth.federationContext(); return c.userRole === 'ADMIN' || c.federationRole === 'MGR'; }
+  protected createPool(): void { if (this.form.invalid) { this.form.markAllAsTouched(); return; } const v = this.form.getRawValue(); this.saving.set(true); this.actionError.set(null); this.api.createSwimmingPool({ name: v.name.trim(), poolType: v.poolType as 'INDOOR' | 'OUTDOOR', poolLength: Number(v.poolLength) as 25 | 50, laneCount: Number(v.laneCount), streetAddress: v.streetAddress.trim(), city: v.city.trim(), postalCode: v.postalCode.trim(), countryIso: v.countryIso.trim().toUpperCase(), teamId: v.teamId.trim() || null }).subscribe({ next: () => { this.actionMessage.set('Pool created.'); this.form.reset({ name: '', poolType: 'INDOOR', poolLength: 25, laneCount: 8, streetAddress: '', city: '', postalCode: '', countryIso: 'IT', teamId: '' }); this.saving.set(false); this.reload(); }, error: (error) => { this.actionError.set(this.auth.getErrorMessage(error, 'Unable to create pool.')); this.saving.set(false); } }); }
+  protected deactivatePool(pool: SwimmingPool): void { this.saving.set(true); this.api.deactivateSwimmingPool(pool.id).subscribe({ next: () => { this.actionMessage.set(`Pool ${pool.name} deactivated.`); this.saving.set(false); this.reload(); }, error: (error) => { this.actionError.set(this.auth.getErrorMessage(error, 'Unable to deactivate pool.')); this.saving.set(false); } }); }
+  private reload(): void { this.api.listSwimmingPools().subscribe({ next: (pools) => { this.pools.set(pools); this.loading.set(false); }, error: (error) => { this.error.set(this.auth.getErrorMessage(error, 'Unable to load pools.')); this.loading.set(false); } }); this.api.listTeams().subscribe({ next: (teams) => this.teams.set(teams), error: () => this.teams.set([]) }); }
+}
