@@ -1,11 +1,16 @@
-node_modules
-.vscode
-.idea
-*.swp
-*.swo
-*~
-.env
-.env.local
-dist
-.DS_Store
-**/package-lock.json
+# Angular
+/.angular/cache
+/dist
+/out-tsc
+
+# Dependencies
+/node_modules
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Editor files
+.idea/
+.vscode/
