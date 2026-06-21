@@ -3,7 +3,7 @@ import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { Router } from '@angular/router';
 import { catchError, throwError } from 'rxjs';
 
-import { ACCESS_TOKEN_STORAGE_KEY, API_HOST } from '../../Services/shared/api-config';
+import { ACCESS_TOKEN_STORAGE_KEY, API_BASE_PATHS } from '../../Services/shared/api-config';
 import { AuthService } from './auth.service';
 
 const AUTH_PUBLIC_PATHS = ['/auth/api/v1/auth/login', '/auth/api/v1/auth/register'];
@@ -12,7 +12,9 @@ export const authTokenInterceptor: HttpInterceptorFn = (request, next) => {
   const auth = inject(AuthService);
   const router = inject(Router);
 
-  if (!request.url.startsWith(API_HOST)) {
+  const isApiRequest = API_BASE_PATHS.some((path) => request.url.startsWith(path));
+
+  if (!isApiRequest) {
     return next(request);
   }
 

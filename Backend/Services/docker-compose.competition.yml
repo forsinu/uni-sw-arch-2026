@@ -99,7 +99,7 @@ services:
       - "traefik.http.routers.competition.rule=Host(`app.docker.localhost`) && PathPrefix(`/comp`)"
       - "traefik.http.routers.competition.entrypoints=websecure"
       - "traefik.http.routers.competition.tls=true"
-      - "traefik.http.routers.competition.priority=10"
+      - "traefik.http.routers.competition.priority=100"
 
       - "traefik.http.services.competition.loadbalancer.server.port=8000"
 

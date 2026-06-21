@@ -33,10 +33,14 @@ The architecture combines:
 
 ```mermaid
 flowchart LR
-    Client[Angular Frontend / Browser / Postman]
+    Client[Browser / Postman]
 
     subgraph Edge[Edge Layer]
         Traefik[Traefik Reverse Proxy\nHTTPS 443 / HTTP 80]
+    end
+
+    subgraph Frontend[Frontend]
+        Angular[Angular Frontend\nStatic bundle / http-server]
     end
 
     subgraph Backend[Backend Services]
@@ -56,6 +60,8 @@ flowchart LR
     end
 
     Client --> Traefik
+    Traefik -->|/| Angular
+    Angular -->|same-origin API calls| Traefik
     Traefik -->|/auth| Auth
     Traefik -->|/fed| Federation
     Traefik -->|/comp| Competition
@@ -81,6 +87,7 @@ The deployment includes these compose files:
 
 | Compose file | Purpose |
 |---|---|
+| `Frontend/docker-compose.yml` | Angular frontend served behind Traefik. |
 | `docker-compose.traefik.yml` | Traefik reverse proxy and `whoami` test service. |
 | `docker-compose.portainer.yml` | Portainer container-management UI. |
 | `docker-compose.rabbitmq.yml` | RabbitMQ broker and RabbitMQ Management UI. |
@@ -112,7 +119,7 @@ The deployment uses one shared network and one private network per backend servi
 
 | Network | Used by | Purpose |
 |---|---|---|
-| `service-mesh-net` | Traefik, RabbitMQ, Portainer, Auth Service, Federation Service, Competition Service | Shared network for public routing and internal service reachability. |
+| `service-mesh-net` | Traefik, Angular Frontend, RabbitMQ, Portainer, Auth Service, Federation Service, Competition Service | Shared network for public routing and internal service reachability. |
 | `auth-net` | Auth Service, `auth-db` | Private database network for Auth Service. |
 | `federation-net` | Federation Service, `federation-db` | Private database network for Federation Service. |
 | `competition-net` | Competition Service, `competition-db` | Private database network for Competition Service. |
@@ -129,6 +136,7 @@ Traefik is the public entry point. It exposes infrastructure services and routes
 
 | Component | URL |
 |---|---|
+| Angular frontend | `https://app.docker.localhost` |
 | Traefik dashboard | `https://dashboard.docker.localhost/dashboard/` |
 | Whoami test service | `https://whoami.docker.localhost` |
 | Portainer | `https://portainer.docker.localhost` |
@@ -359,13 +367,13 @@ Each backend service has its own PostgreSQL database.
 
 ## 12. Frontend integration summary
 
-The Angular frontend should call the backend through Traefik public URLs.
+The Angular frontend is served through Traefik at `https://app.docker.localhost` and calls the backend with same-origin relative paths.
 
 | Domain | Service | Base URL |
 |---|---|---|
-| Authentication and users | Auth Service | `https://app.docker.localhost/auth` |
-| Federation members, teams, pools | Federation Service | `https://app.docker.localhost/fed` |
-| Meetings, events, entries, results | Competition Service | `https://app.docker.localhost/comp` |
+| Authentication and users | Auth Service | `/auth` |
+| Federation members, teams, pools | Federation Service | `/fed` |
+| Meetings, events, entries, results | Competition Service | `/comp` |
 
 Recommended frontend service split:
 

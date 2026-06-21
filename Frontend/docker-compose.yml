@@ -3,9 +3,21 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - "4200:4200"
-    volumes:
-      - ./certs/localhost.crt:/app/certs/localhost.crt:ro
-      - ./certs/localhost.key:/app/certs/localhost.key:ro
+    networks:
+      - service-mesh-net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=service-mesh-net"
+
+      - "traefik.http.routers.frontend.rule=Host(`app.docker.localhost`)"
+      - "traefik.http.routers.frontend.entrypoints=websecure"
+      - "traefik.http.routers.frontend.tls=true"
+      - "traefik.http.routers.frontend.priority=1"
+
+      - "traefik.http.services.frontend.loadbalancer.server.port=4200"
     restart: unless-stopped
+
+networks:
+  service-mesh-net:
+    external: true
+    name: service-mesh-net

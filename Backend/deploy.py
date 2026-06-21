@@ -64,9 +64,7 @@ class Deployment:
         self.portainerCompose = resolvePath(requiredEnv("PORTAINER_COMPOSE"))
         self.rabbitmqCompose = resolvePath(requiredEnv("RABBITMQ_COMPOSE"))
         self.authCompose = resolvePath(requiredEnv("SERVICES_AUTH_COMPOSE"))
-        self.federationCompose = resolvePath(
-            requiredEnv("SERVICES_FEDERATION_COMPOSE")
-        )
+        self.federationCompose = resolvePath(requiredEnv("SERVICES_FEDERATION_COMPOSE"))
         self.competitionCompose = resolvePath(
             requiredEnv("SERVICES_COMPETITION_COMPOSE")
         )
@@ -78,9 +76,7 @@ class Deployment:
         self.jwtKeysDir = resolvePath(requiredEnv("JWT_KEYS_DIR"))
         self.jwtPrivateKey = resolvePath(requiredEnv("JWT_PRIVATE_KEY_HOST_PATH"))
         self.jwtPublicKey = resolvePath(requiredEnv("JWT_PUBLIC_KEY_HOST_PATH"))
-        self.internalServiceToken = resolvePath(
-            requiredEnv("HOST_SERVICE_TOKEN_PATH")
-        )
+        self.internalServiceToken = resolvePath(requiredEnv("HOST_SERVICE_TOKEN_PATH"))
 
     def composeCmd(self, *args: str) -> list[str]:
         return [
@@ -236,8 +232,8 @@ tls:
         print("  RabbitMQ:          https://rabbitmq.docker.localhost")
         print("Services: ")
         print("  Auth service:      https://app.docker.localhost/auth")
-        print("  Federation:        https://app.docker.localhost/federation")
-        print("  Competition:       https://app.docker.localhost/competition")
+        print("  Federation:        https://app.docker.localhost/fed")
+        print("  Competition:       https://app.docker.localhost/comp")
         print()
         print("If DNS does not resolve, add these lines to /etc/hosts:")
         print("  127.0.0.1 dashboard.docker.localhost")

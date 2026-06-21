@@ -88,6 +88,7 @@ services:
       - "traefik.http.routers.auth.rule=Host(`app.docker.localhost`) && PathPrefix(`/auth`)"
       - "traefik.http.routers.auth.entrypoints=websecure"
       - "traefik.http.routers.auth.tls=true"
+      - "traefik.http.routers.auth.priority=100"
 
       - "traefik.http.services.auth.loadbalancer.server.port=8000"
 

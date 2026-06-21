@@ -94,6 +94,7 @@ services:
       - "traefik.http.routers.federation.rule=Host(`app.docker.localhost`) && PathPrefix(`/fed`)"
       - "traefik.http.routers.federation.entrypoints=websecure"
       - "traefik.http.routers.federation.tls=true"
+      - "traefik.http.routers.federation.priority=100"
 
       - "traefik.http.services.federation.loadbalancer.server.port=8000"
 

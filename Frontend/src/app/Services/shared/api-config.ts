@@ -1,4 +1,6 @@
-export const API_HOST = 'http://app.docker.localhost';
+export const API_HOST = '';
+
+export const API_BASE_PATHS = ['/auth', '/fed', '/comp'];
 
 export const AUTH_API_BASE_URL = `${API_HOST}/auth/api/v1`;
 export const FEDERATION_API_BASE_URL = `${API_HOST}/fed/api/v1`;
