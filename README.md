@@ -437,33 +437,6 @@ In Docker Compose this is mostly handled through service dependencies and health
 
 ---
 
-## 14. Suggested future improvements
-
-1. **Transactional outbox**
-   - Store domain events in the same database transaction as the domain change.
-   - Publish them asynchronously after commit.
-   - This avoids inconsistencies when a database commit succeeds but RabbitMQ publishing fails.
-
-2. **Dead-letter queues**
-   - Add dead-letter queues for events that repeatedly fail.
-   - This avoids infinite requeue loops.
-
-3. **Centralized observability**
-   - Add structured logs across all services.
-   - Add metrics for request count, latency, queue depth, and failed jobs.
-
-4. **Service discovery configuration**
-   - Keep public paths and printed deployment URLs aligned.
-   - Avoid mismatches such as `/fed` vs `/federation` or `/comp` vs `/competition`.
-
-5. **Frontend role-based dashboard**
-   - Show different profile/dashboard content for athletes, coaches, referees, managers, and admins.
-   - Keep all backend calls routed through the correct Angular API service.
-
-6. **Stronger result authorization**
-   - Ensure that the identifier stored in meeting referee assignments represents a single referee, not just a club or federation.
-   - Otherwise, all users sharing the same federation id could be incorrectly authorized.
-
 
 ### Instructions to run application Backend
 ```
