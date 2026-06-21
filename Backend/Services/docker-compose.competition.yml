@@ -20,7 +20,7 @@ services:
           "CMD-SHELL",
           "pg_isready -U ${DB_COMPETITION_USER} -d ${DB_COMPETITION_NAME}",
         ]
-      interval: 30s
+      interval: 10s
       timeout: 5s
       retries: 3
 

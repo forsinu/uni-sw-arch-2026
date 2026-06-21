@@ -1,4 +1,7 @@
 node_modules
+certs
+dist
+.angular
 .git
 .gitignore
 npm-debug.log

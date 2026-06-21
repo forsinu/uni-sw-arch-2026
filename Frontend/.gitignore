@@ -2,6 +2,7 @@
 /.angular/cache
 /dist
 /out-tsc
+/certs
 
 # Dependencies
 /node_modules

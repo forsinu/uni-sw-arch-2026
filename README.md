@@ -25,7 +25,7 @@ The architecture combines:
 - **HTTP APIs** for synchronous requests from the frontend or from service to service;
 - **RabbitMQ events** for asynchronous domain notifications;
 - **JWT access tokens** for stateless authentication and authorization;
-- **service-owned PostgreSQL databases** to keep domain boundaries clear.
+- **Service-owned PostgreSQL databases** to keep domain boundaries clear.
 
 ---
 
@@ -73,9 +73,9 @@ flowchart LR
 
 ---
 
-## 3. Deployment model
+## 3. Backend Deployment model
 
-The platform is deployed with Docker Compose. The `deploy.py` script loads the common environment file, resolves all compose files, creates required local assets, and starts the containers.
+The platform is deployed with Docker Compose. The `deploy.sh` script loads the backend environment files, then runs `deploy.py` to resolve all compose files and start the containers.
 
 The deployment includes these compose files:
 
@@ -91,15 +91,15 @@ The deployment includes these compose files:
 ### Deployment commands
 
 ```bash
-python deploy.py setup
-python deploy.py start
-python deploy.py down
-python deploy.py remove
+./deploy.sh setup
+./deploy.sh start
+./deploy.sh down
+./deploy.sh remove
 ```
 
 | Command | Meaning |
 |---|---|
-| `setup` | Generates local TLS certificates, Traefik TLS configuration, JWT RSA keys, the internal service token, and the shared Docker network. |
+| `setup` | Generates local TLS certificates, Traefik TLS configuration, JWT RSA keys and the shared Docker network. |
 | `start` | Runs setup and starts all containers with Docker Compose. |
 | `down` | Stops and removes containers while preserving volumes. |
 | `remove` | Stops containers and removes volumes. |
@@ -136,15 +136,15 @@ Traefik is the public entry point. It exposes infrastructure services and routes
 
 ### Backend service paths and URLs
 
-| Backend service | Public path prefix | Public base URL | Internal container port | Notes |
+| Backend service | Public path prefix | Public base URL | Internal container port |
 |---|---:|---|---:|---|
-| **Auth Service** | `/auth` | `https://app.docker.localhost/auth` | `8000` | Traefik strips `/auth` before forwarding to FastAPI. |
-| **Federation Service** | `/fed` | `https://app.docker.localhost/fed` | `8001` | Traefik strips `/fed` before forwarding to FastAPI. |
-| **Competition Service** | `/comp` | `https://app.docker.localhost/comp` | `8002` | Traefik strips `/comp` before forwarding to FastAPI. |
+| **Auth Service** | `/auth` | `https://app.docker.localhost/auth` | `8000` |
+| **Federation Service** | `/fed` | `https://app.docker.localhost/fed` | `8001` | 
+| **Competition Service** | `/comp` | `https://app.docker.localhost/comp` | `8002` |
 
 ### Documentation URLs
 
-These are useful during development:
+The documentation for the REST API endpoints can be found at the following path:
 
 | Service | Swagger UI | OpenAPI JSON |
 |---|---|---|
@@ -156,13 +156,12 @@ These are useful during development:
 
 ## 6. Service domain responsibilities
 
-This section describes the business responsibility of each backend service. It intentionally avoids listing API endpoints. The goal is to define **what each service owns** and **what it should not own**.
+This section describes the business responsibility of each backend service. The goal is to define **what each service owns** and **what it should not own**.
 
----
 
-## 6.1 Auth Service
+### 6.1 Auth Service
 
-### Service identity
+#### Service identity
 
 | Item | Value |
 |---|---|
@@ -173,9 +172,9 @@ This section describes the business responsibility of each backend service. It i
 | Shared network | `service-mesh-net` |
 | Framework | FastAPI |
 
-### Domain responsibilities
+#### Domain responsibilities
 
-The Auth Service owns the **identity and access domain**. It is the source of truth for platform accounts, authentication, sessions, and token issuance.
+The Auth Service owns the **identity and access domain**. It is the source of truth for platform accounts, authentication, and sessions management.
 
 Main responsibilities:
 
@@ -184,13 +183,11 @@ Main responsibilities:
 - manage refresh tokens, logout, session rotation, and revocation;
 - store security audit data and synchronize federation references through events.
 
-Auth Service stores only a reference to a federation member. It does not own teams, pools, meetings, events, entries, or race results.
-
 ---
 
-## 6.2 Federation Service
+### 6.2 Federation Service
 
-### Service identity
+#### Service identity
 
 | Item | Value |
 |---|---|
@@ -201,24 +198,22 @@ Auth Service stores only a reference to a federation member. It does not own tea
 | Shared network | `service-mesh-net` |
 | Framework | FastAPI |
 
-### Domain responsibilities
+#### Domain responsibilities
 
 The Federation Service owns the **federation registry domain**. It is the source of truth for federation members and swimming-organization data.
 
 Main responsibilities:
 
-- manage federation members and federation roles;
+- manage federation members and federation roles such as athletes, coach and referees;
 - manage swimming teams and team membership;
 - manage swimming pools and their association with teams;
-- publish member lifecycle events and protect internal service routes.
-
-Federation Service does not own login credentials, sessions, JWT signing keys, competition schedules, race entries, or race results.
+- publish member lifecycle events.
 
 ---
 
-## 6.3 Competition Service
+### 6.3 Competition Service
 
-### Service identity
+#### Service identity
 
 | Item | Value |
 |---|---|
@@ -229,18 +224,15 @@ Federation Service does not own login credentials, sessions, JWT signing keys, c
 | Shared network | `service-mesh-net` |
 | Framework | FastAPI |
 
-### Domain responsibilities
+#### Domain responsibilities
 
-The Competition Service owns the **competition and race-management domain**. It is the source of truth for meetings, events, entries, results, and meeting-specific referee assignments.
+The Competition Service owns the **competition and race-management domain**. It is the source of truth for meetings, events, entries, and results management.
 
 Main responsibilities:
 
 - manage swim meetings and their lifecycle;
 - manage swim events, athlete entries, and race results;
 - assign referees to meetings and enforce result-insertion authorization;
-- store external references to Federation Service entities without owning them.
-
-Competition Service does not own user credentials, sessions, federation-member master data, team master data, or swimming-pool master data.
 
 ---
 
@@ -281,7 +273,7 @@ Examples:
 - the frontend calls Auth Service to login;
 - the frontend calls Federation Service to list athletes;
 - the frontend calls Competition Service to list meetings;
-- a backend service can validate or retrieve service-level data when needed.
+- backend services can retrieve JWT validation key from the Authentication Service.
 
 ### Asynchronous communication
 
@@ -421,18 +413,5 @@ The generated certificate is mounted into Traefik through the dynamic TLS config
 
 Each backend service exposes a local health endpoint used by Docker health checks. PostgreSQL containers use `pg_isready`. RabbitMQ uses `rabbitmq-diagnostics ping`.
 
-### Startup order
-
-Recommended startup flow:
-
-1. create certificates and keys;
-2. create the shared Docker network;
-3. start RabbitMQ and databases;
-4. start Auth Service;
-5. start Federation Service;
-6. start Competition Service;
-7. start frontend.
-
-In Docker Compose this is mostly handled through service dependencies and health checks, but RabbitMQ consumers should still be checked from the RabbitMQ Management UI.
 
 ---

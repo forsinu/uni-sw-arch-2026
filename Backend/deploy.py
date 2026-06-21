@@ -5,24 +5,17 @@ import secrets
 import shlex
 import subprocess
 import sys
-import dotenv
 from pathlib import Path
 
 
 ROOT_DIR = Path(__file__).resolve().parent
-SETTINGS_FILE = ROOT_DIR / ".settings.env"
 
 
-def loadEnvFile(path: Path) -> dict[str, str]:
-    if not path.exists():
-        raise FileNotFoundError(f"Missing env file: {path}")
-
-    values = dotenv.dotenv_values(dotenv_path=path)
-
-    if not values:
-        raise Exception(f"Unable to read values for {path.name}")
-
-    return values
+def requiredEnv(name: str) -> str:
+    value = os.getenv(name)
+    if value is None or value == "":
+        raise KeyError(name)
+    return value
 
 
 def resolvePath(value: str) -> Path:
@@ -63,34 +56,30 @@ def dockerNetworkExists(network_name: str) -> bool:
 
 class Deployment:
     def __init__(self) -> None:
-        self.settings = loadEnvFile(SETTINGS_FILE)
-
-        self.envFile = resolvePath(self.settings["ENV_FILE"])
-        self.serviceEnv = loadEnvFile(self.envFile)
-
         self.env = os.environ.copy()
-        self.env.update(self.serviceEnv)
 
-        self.traefikCompose = resolvePath(self.settings["TRAEFIK_COMPOSE"])
-        self.portainerCompose = resolvePath(self.settings["PORTAINER_COMPOSE"])
-        self.rabbitmqCompose = resolvePath(self.settings["RABBITMQ_COMPOSE"])
-        self.authCompose = resolvePath(self.settings["SERVICES_AUTH_COMPOSE"])
+        self.envFile = resolvePath(requiredEnv("ENV_FILE"))
+
+        self.traefikCompose = resolvePath(requiredEnv("TRAEFIK_COMPOSE"))
+        self.portainerCompose = resolvePath(requiredEnv("PORTAINER_COMPOSE"))
+        self.rabbitmqCompose = resolvePath(requiredEnv("RABBITMQ_COMPOSE"))
+        self.authCompose = resolvePath(requiredEnv("SERVICES_AUTH_COMPOSE"))
         self.federationCompose = resolvePath(
-            self.settings["SERVICES_FEDERATION_COMPOSE"]
+            requiredEnv("SERVICES_FEDERATION_COMPOSE")
         )
         self.competitionCompose = resolvePath(
-            self.settings["SERVICES_COMPETITION_COMPOSE"]
+            requiredEnv("SERVICES_COMPETITION_COMPOSE")
         )
 
-        self.certsDir = resolvePath(self.settings["CERTS_DIR"])
-        self.dynamicDir = resolvePath(self.settings["DYNAMIC_DIR"])
-        self.dockerNetwork = self.settings.get("DOCKER_NETWORK", "service-mesh-net")
+        self.certsDir = resolvePath(requiredEnv("CERTS_DIR"))
+        self.dynamicDir = resolvePath(requiredEnv("DYNAMIC_DIR"))
+        self.dockerNetwork = os.getenv("DOCKER_NETWORK", "service-mesh-net")
 
-        self.jwtKeysDir = resolvePath(self.serviceEnv["JWT_KEYS_DIR"])
-        self.jwtPrivateKey = resolvePath(self.serviceEnv["JWT_PRIVATE_KEY_HOST_PATH"])
-        self.jwtPublicKey = resolvePath(self.serviceEnv["JWT_PUBLIC_KEY_HOST_PATH"])
+        self.jwtKeysDir = resolvePath(requiredEnv("JWT_KEYS_DIR"))
+        self.jwtPrivateKey = resolvePath(requiredEnv("JWT_PRIVATE_KEY_HOST_PATH"))
+        self.jwtPublicKey = resolvePath(requiredEnv("JWT_PUBLIC_KEY_HOST_PATH"))
         self.internalServiceToken = resolvePath(
-            self.serviceEnv["HOST_SERVICE_TOKEN_PATH"]
+            requiredEnv("HOST_SERVICE_TOKEN_PATH")
         )
 
     def composeCmd(self, *args: str) -> list[str]:
@@ -182,8 +171,8 @@ tls:
         )
 
         if not self.jwtPrivateKey.exists() or not self.jwtPublicKey.exists():
-            jwtAlgorithm = self.serviceEnv.get("JWT_ALGORITHM", "RS256")
-            jwtKeySize = self.serviceEnv.get("JWT_KEY_SIZE", "4096")
+            jwtAlgorithm = os.getenv("JWT_ALGORITHM", "RS256")
+            jwtKeySize = os.getenv("JWT_KEY_SIZE", "4096")
 
             print("Generating JWT RSA key pair...")
             print(f"  algorithm: {jwtAlgorithm}")
@@ -276,11 +265,11 @@ tls:
     def usage(self) -> None:
         print("Usage:")
         print(
-            "  python deploy.py setup   Generate certs, tls.yaml, JWT keys, and Docker network"
+            "  ./deploy.sh setup   Generate certs, tls.yaml, JWT keys, and Docker network"
         )
-        print("  python deploy.py start   Run setup, then start all containers")
-        print("  python deploy.py down    Stop Compose containers. Preserve volumes")
-        print("  python deploy.py remove  Remove Compose containers and volumes")
+        print("  ./deploy.sh start   Run setup, then start all containers")
+        print("  ./deploy.sh down    Stop Compose containers. Preserve volumes")
+        print("  ./deploy.sh remove  Remove Compose containers and volumes")
 
 
 def main() -> int:

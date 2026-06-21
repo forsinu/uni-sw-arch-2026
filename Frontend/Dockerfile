@@ -14,4 +14,4 @@ RUN npm install -g http-server
 COPY --from=0 /app/dist/angualr-fronted/browser /app/dist
 
 EXPOSE 4200
-CMD ["http-server", "/app/dist", "-p", "4200", "-s"]
+CMD ["http-server", "/app/dist", "-a", "0.0.0.0", "-p", "4200", "-S", "-C", "/app/certs/localhost.crt", "-K", "/app/certs/localhost.key", "-s"]
