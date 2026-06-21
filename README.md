@@ -436,21 +436,3 @@ Recommended startup flow:
 In Docker Compose this is mostly handled through service dependencies and health checks, but RabbitMQ consumers should still be checked from the RabbitMQ Management UI.
 
 ---
-
-
-### Instructions to run application Backend
-```
-#!/bin/bash
-# Enter in Backend directory
-cd Backend/
-
-# Create a Python Virtual Environment
-python -m venv .venv
-source .venv/bin/activate
-
-# Install the requirement
-pip install python-dotenv
-
-# Start the application
-python deploy.py start
-```
