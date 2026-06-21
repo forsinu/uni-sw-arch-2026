@@ -40,7 +40,7 @@ router = APIRouter(
     operation_id="listSwimMeetings",
 )
 async def listSwimMeetings(
-    access: Annotated[AccessContext, Depends(authenticatedAccessHandler)],
+    # access: Annotated[AccessContext, Depends(authenticatedAccessHandler)],
     meetingRepository: Annotated[
         SwimMeetingRepository,
         Depends(swimMeetingRepositoryHandler),
@@ -123,7 +123,7 @@ async def createSwimMeeting(
 )
 async def getSwimMeeting(
     meetingId: uuid.UUID,
-    access: Annotated[AccessContext, Depends(authenticatedAccessHandler)],
+    # access: Annotated[AccessContext, Depends(authenticatedAccessHandler)],
     meetingRepository: Annotated[
         SwimMeetingRepository,
         Depends(swimMeetingRepositoryHandler),

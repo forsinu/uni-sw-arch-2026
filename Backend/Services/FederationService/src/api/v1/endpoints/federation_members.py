@@ -81,6 +81,44 @@ async def listFederationMembers(
     )
 
 
+@router.get(
+    "",
+    response_model=PaginatedFederationMemberResp,
+    status_code=status.HTTP_200_OK,
+    operation_id="listAthletes",
+)
+async def listAthletes(
+    # _: Annotated[object, Depends(adminAccessHandler)],
+    memberRepository: Annotated[
+        FederationMemberRepository,
+        Depends(federationMemberRepositoryHandler),
+    ],
+    teamId: Annotated[uuid.UUID | None, Query()] = None,
+    # fedRole: Annotated[FederationRole | None, Query()] = None,
+    # includeInactive: Annotated[bool, Query()] = False,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+    offset: Annotated[int, Query(ge=0)] = 0,
+):
+    totalRecords, members = await memberRepository.listMembers(
+        teamId=teamId,
+        fedRole=FederationRole.ATHLETE,
+        limit=limit,
+        offset=offset,
+    )
+
+    return PaginatedFederationMemberResp.model_validate(
+        {
+            "metadata": {
+                "totalRecords": totalRecords,
+                "limit": limit,
+                "offset": offset,
+                "hasMore": (offset + limit) < totalRecords,
+            },
+            "results": members,
+        }
+    )
+
+
 @router.post(
     "",
     response_model=FederationMemberResp,

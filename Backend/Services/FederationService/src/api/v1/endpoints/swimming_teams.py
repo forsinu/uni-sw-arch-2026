@@ -35,7 +35,7 @@ router = APIRouter(
     operation_id="listSwimmingTeams",
 )
 async def listSwimmingTeams(
-    _: Annotated[object, Depends(adminAccessHandler)],
+    # _: Annotated[object, Depends(adminAccessHandler)],
     teamRepository: Annotated[
         SwimmingTeamRepository,
         Depends(swimmingTeamRepositoryHandler),
@@ -103,7 +103,7 @@ async def createSwimmingTeam(
 )
 async def getSwimmingTeam(
     teamId: uuid.UUID,
-    _: Annotated[object, Depends(adminAccessHandler)],
+    # _: Annotated[object, Depends(adminAccessHandler)],
     teamRepository: Annotated[
         SwimmingTeamRepository,
         Depends(swimmingTeamRepositoryHandler),

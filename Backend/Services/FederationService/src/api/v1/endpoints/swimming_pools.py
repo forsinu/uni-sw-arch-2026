@@ -53,7 +53,7 @@ def ensureCanManagePool(
     operation_id="listSwimmingPools",
 )
 async def listSwimmingPools(
-    access: Annotated[AccessContext, Depends(adminOrTeamManagerAccessHandler)],
+    # access: Annotated[AccessContext, Depends(adminOrTeamManagerAccessHandler)],
     poolRepository: Annotated[
         SwimmingPoolRepository,
         Depends(swimmingPoolRepositoryHandler),
@@ -67,8 +67,8 @@ async def listSwimmingPools(
 ):
     effectiveTeamId = teamId
 
-    if not access.isAdmin:
-        effectiveTeamId = access.teamId
+    # if not access.isAdmin:
+    #     effectiveTeamId = access.teamId
 
     totalRecords, pools = await poolRepository.listPools(
         city=city,
@@ -160,7 +160,7 @@ async def createSwimmingPool(
 )
 async def getSwimmingPool(
     poolId: uuid.UUID,
-    access: Annotated[AccessContext, Depends(adminOrTeamManagerAccessHandler)],
+    # access: Annotated[AccessContext, Depends(adminOrTeamManagerAccessHandler)],
     poolRepository: Annotated[
         SwimmingPoolRepository,
         Depends(swimmingPoolRepositoryHandler),
@@ -174,7 +174,7 @@ async def getSwimmingPool(
             detail="Swimming pool not found.",
         )
 
-    ensureCanManagePool(access, pool)
+    # ensureCanManagePool(access, pool)
 
     return pool
 

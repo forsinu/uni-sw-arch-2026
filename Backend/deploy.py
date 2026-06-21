@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from __future__ import annotations
 
 import os
@@ -251,7 +249,6 @@ tls:
         print("  Auth service:      https://app.docker.localhost/auth")
         print("  Federation:        https://app.docker.localhost/federation")
         print("  Competition:       https://app.docker.localhost/competition")
-        print("  Live results:      https://app.docker.localhost/live")
         print()
         print("If DNS does not resolve, add these lines to /etc/hosts:")
         print("  127.0.0.1 dashboard.docker.localhost")

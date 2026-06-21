@@ -71,7 +71,7 @@ def ensureMeetingAcceptsEntries(
 )
 async def listSwimEventEntries(
     eventId: uuid.UUID,
-    access: Annotated[AccessContext, Depends(authenticatedAccessHandler)],
+    # access: Annotated[AccessContext, Depends(authenticatedAccessHandler)],
     entryRepository: Annotated[
         SwimEventEntryRepository,
         Depends(swimEventEntryRepositoryHandler),
