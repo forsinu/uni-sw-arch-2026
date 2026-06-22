@@ -126,8 +126,6 @@ The deployment uses one shared network and one private network per backend servi
 
 Each database is attached only to its owning service network. This prevents other services from bypassing the owning service API.
 
----
-
 ## 5. Public URLs and service paths
 
 Traefik is the public entry point. It exposes infrastructure services and routes backend traffic based on the request hostname and path prefix.
@@ -145,7 +143,7 @@ Traefik is the public entry point. It exposes infrastructure services and routes
 ### Backend service paths and URLs
 
 | Backend service | Public path prefix | Public base URL | Internal container port |
-|---|---:|---|---:|---|
+|---|---:|---|---:|
 | **Auth Service** | `/auth` | `https://app.docker.localhost/auth` | `8000` |
 | **Federation Service** | `/fed` | `https://app.docker.localhost/fed` | `8001` | 
 | **Competition Service** | `/comp` | `https://app.docker.localhost/comp` | `8002` |
