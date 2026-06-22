@@ -102,6 +102,17 @@ class UserAccountRepository:
 
         return result.scalar_one_or_none()
 
+    async def getAdminUser(self) -> UserAccount | None:
+        query = (
+            select(UserAccount)
+            .where(UserAccount.userRole == UserAccountRole.ADMIN)
+            .order_by(UserAccount.createdAt.asc())
+            .limit(1)
+        )
+
+        result = await self.session.execute(query)
+        return result.scalar_one_or_none()
+
     async def listUsers(
         self,
         limit: int,

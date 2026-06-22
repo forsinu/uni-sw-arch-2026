@@ -9,6 +9,11 @@ export interface RegisterRequest {
   password: string;
 }
 
+export interface ChangePasswordRequest {
+  oldPasswd: string;
+  newPasswd: string;
+}
+
 export interface AdminCreateAccountRequest {
   username: string;
   email?: string | null;

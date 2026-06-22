@@ -8,6 +8,7 @@ import {
   AccessTokenResponse,
   AdminCreateAccountRequest,
   AdminCreateAccountResponse,
+  ChangePasswordRequest,
   LoginRequest,
   RegisterRequest,
   UpdateAccountStatusRequest,
@@ -57,6 +58,16 @@ export class AuthApiService {
 
   getCurrentUser(): Observable<UserAccount> {
     return this.http.get<UserAccount>(`${this.usersUrl}/me`);
+  }
+
+  changeCurrentUserPassword(
+    payload: ChangePasswordRequest
+  ): Observable<MessageResponse> {
+    return this.http.patch<MessageResponse>(
+      `${this.usersUrl}/me/password`,
+      payload,
+      { withCredentials: true }
+    );
   }
 
   listAccounts(): Observable<PaginatedResponse<UserAccount>> {

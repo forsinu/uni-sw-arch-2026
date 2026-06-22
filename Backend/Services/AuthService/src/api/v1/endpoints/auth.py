@@ -60,6 +60,13 @@ async def registerUser(
         Depends(userAccountHistoryRepositoryHandler),
     ],
 ):
+    # Only accounts created through Federation contain dots in the username
+    if "." in credentials.username:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username must not contain dots.",
+        )
+
     try:
         async with database.transaction(session):
             user = await userRepository.createUser(

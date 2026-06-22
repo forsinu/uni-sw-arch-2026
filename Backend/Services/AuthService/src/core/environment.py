@@ -45,6 +45,11 @@ class EnvHandler(BaseSettings):
     PASSWORD_MIN_LEN: int = 16
     MAX_SESSIONS: int = 3
 
+    CREATE_ADMIN_ON_STARTUP: bool = True
+    STARTUP_ADMIN_USERNAME: str = "admin"
+    STARTUP_ADMIN_EMAIL: str | None = None
+    STARTUP_ADMIN_PASSWORD: str = "admin"
+
     # =========================
     # DATABASE
     # =========================

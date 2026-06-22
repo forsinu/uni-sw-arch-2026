@@ -143,6 +143,20 @@ class RefreshTokenRepository:
 
         return result.rowcount or 0
 
+    async def revokeAllActiveRefreshTokens(self, rotatedAt: datetime) -> int:
+        query = (
+            update(RefreshToken)
+            .where(RefreshToken.isActive == True)
+            .values(
+                isActive=False,
+                rotatedAt=rotatedAt,
+            )
+        )
+
+        result = await self.session.execute(query)
+
+        return result.rowcount or 0
+
     async def revokeOldestSessionsIfLimitExceeded(
         self,
         userAccountId: uuid.UUID,

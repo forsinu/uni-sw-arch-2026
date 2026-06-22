@@ -1,1 +1,26 @@
- 
+.password-form {
+  max-width: 520px;
+}
+
+.password-form input {
+  outline: none;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.password-form input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(0, 109, 156, 0.14);
+}
+
+.password-form input.is-invalid {
+  border-color: var(--color-danger);
+}
+
+.field-message {
+  margin: -0.45rem 0 0;
+  color: var(--color-danger);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}

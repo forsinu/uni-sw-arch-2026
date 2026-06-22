@@ -49,6 +49,74 @@
             <p class="state-text">No team details available.</p>
           }
         </article>
+
+        <article class="profile-card profile-card-wide">
+          <div class="card-heading"><h2>Password</h2></div>
+
+          <form class="action-form password-form" [formGroup]="passwordForm" (ngSubmit)="changePassword()" novalidate>
+            <label for="oldPasswd">
+              Current password
+              <input
+                id="oldPasswd"
+                type="password"
+                formControlName="oldPasswd"
+                autocomplete="current-password"
+                placeholder="Current password"
+                [class.is-invalid]="passwordFieldInvalid('oldPasswd')"
+              >
+            </label>
+
+            @if (passwordFieldInvalid('oldPasswd')) {
+              <p class="field-message">Current password must be 8-128 characters.</p>
+            }
+
+            <label for="newPasswd">
+              New password
+              <input
+                id="newPasswd"
+                type="password"
+                formControlName="newPasswd"
+                autocomplete="new-password"
+                placeholder="New password"
+                [class.is-invalid]="passwordFieldInvalid('newPasswd')"
+              >
+            </label>
+
+            @if (passwordFieldInvalid('newPasswd')) {
+              <p class="field-message">New password must be 8-128 characters.</p>
+            }
+
+            <label for="confirmNewPasswd">
+              Confirm new password
+              <input
+                id="confirmNewPasswd"
+                type="password"
+                formControlName="confirmNewPasswd"
+                autocomplete="new-password"
+                placeholder="Repeat new password"
+                [class.is-invalid]="passwordFieldInvalid('confirmNewPasswd') || passwordMismatch()"
+              >
+            </label>
+
+            @if (passwordFieldInvalid('confirmNewPasswd')) {
+              <p class="field-message">Confirm your new password.</p>
+            } @else if (passwordMismatch()) {
+              <p class="field-message">Passwords do not match.</p>
+            }
+
+            @if (passwordError()) {
+              <p class="action-message action-failure">{{ passwordError() }}</p>
+            }
+
+            @if (passwordSuccess()) {
+              <p class="action-message action-success">{{ passwordSuccess() }}</p>
+            }
+
+            <button class="primary-action" type="submit" [disabled]="passwordLoading()">
+              {{ passwordLoading() ? 'Changing password...' : 'Change password' }}
+            </button>
+          </form>
+        </article>
       </div>
     }
   }

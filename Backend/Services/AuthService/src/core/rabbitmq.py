@@ -225,9 +225,9 @@ class RabbitMQHandler:
         first = self._normalizeUsernamePart(firstName)
         last = self._normalizeUsernamePart(lastName)
 
-        suffix = federationMemberId.replace("-", "")[:8]
+        # suffix = federationMemberId.replace("-", "")[:8]
 
-        username = f"{first}.{last}.{suffix}"
+        username = f"{first}.{last}"
 
         return username[:32]
 
